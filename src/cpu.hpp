@@ -13,6 +13,7 @@ public:
 
 
     auto isPageCrossed() const -> bool { return page_crossed; }
+    auto getTotalCycles() const -> u64 { return total_cycles; }
 
 public:
     enum : u8 {
@@ -54,10 +55,15 @@ public:
                                    u8 low  = mem->read(addr);
                                    return (high << 8) | low; }
 
+    auto read16_zp(u8 addr) -> u16 { u8 low  = mem->read(addr);
+                                     u8 high = mem->read((addr + 1) & 0xFF);
+                                     return ((high) << 8) | low; }
+
     void push(u8 value) { mem->write(STACK + regs.SP--, value); }
     auto pop() -> u8 { return mem->read(STACK + (++regs.SP)); }
 
 
+    inline auto high(u16 addr) -> u8 { return addr >> 8; }
     inline void set_flag(u8 flag, bool value) { (value) ? (regs.P |= flag) : (regs.P &= ~flag); }
 
     inline void set_nz(u8 value) {
@@ -87,13 +93,14 @@ private:
                                   u8 low = mem->read(addr);
                                   u8 high = mem->read((addr & 0xFF00) | ((addr + 1) & 0x00FF));
                                   return (static_cast<u16>(high) << 8 | low); }
-    inline auto AM_INX() -> u16 { return read16(AM_ZPX()); }
-    inline auto AM_INY() -> u16 { const u16 addr = read16(AM_ZPG());
+    inline auto AM_INX() -> u16 { return read16_zp(AM_ZPX()); }
+    inline auto AM_INY() -> u16 { const u16 addr = read16_zp(AM_ZPG());
                                   const u16 indexed_addr = addr + regs.Y;
                                   page_crossed = (addr & 0xFF00) != (indexed_addr & 0xFF00);
                                   return indexed_addr; }
 
 
+    /* Официальные опкоды */
     void LDA(u16 addr); void STA(u16 addr); void LDX(u16 addr); void STX(u16 addr); void LDY(u16 addr); void STY(u16 addr);
     void TAX(); void TXA(); void TAY(); void TYA(); void TSX(); void TXS();
     void ADC(u16 addr); void SBC(u16 addr); void INC(u16 addr); void DEC(u16 addr); void INX(); void DEX(); void INY(); void DEY();
@@ -107,4 +114,11 @@ private:
     void CLC(); void SEC(); void CLI(); void SEI(); void CLD(); void SED(); void CLV();
     void NOP();
 
+
+    /* Неофициальные опкоды */
+    void ALR(u16 addr); void ANC(u16 addr); void ANE(u16 addr); void ARR(u16 addr);
+    void DCP(u16 addr); void ISC(u16 addr); void LAS(u16 addr); void LAX(u16 addr); void LXA(u16 addr);
+    void RLA(u16 addr); void RRA(u16 addr); void SAX(u16 addr); void SBX(u16 addr); void SHA(u16 addr); void SHX(u16 addr); void SHY(u16 addr);
+    void SLO(u16 addr); void SRE(u16 addr); void TAS(u16 addr); void USBC(u16 addr); void KIL(u16 addr);
+    void NOP_IGN(u16 addr);
 };
