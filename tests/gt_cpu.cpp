@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include "../src/cpu.hpp"
-#include <initializer_list>
+#include "../src/cartridge.hpp"
+#include "../src/mappers/mapper0.hpp"
 
 
 class CpuTest : public testing::Test {
@@ -10,8 +11,6 @@ protected:
 
 
     void SetUp() override {
-        mem.ram.fill(0);
-
         cpu.reset();
         cpu.regs.PC = 0x0200;
     }
@@ -536,6 +535,38 @@ TEST_F(CpuTest, MULTIPLY_TEST) {
 
     /* 10 * 3 = 30 (0x1E) */
     EXPECT_EQ(mem.read(0x0002), 0x1E);
+}
+
+
+TEST_F(CpuTest, NESTEST) {
+    Cartridge cart;
+    cart.loadNES("tests/roms/nestest.nes");
+
+    Mapper0 mapper(cart);
+    Memory memory(&mapper);
+    Cpu cpu(&memory);
+
+
+    cpu.reset();
+    cpu.regs.PC = 0xC000;
+    cpu.regs.P = 0x24;
+
+
+    for(int i=0;i<8991;++i) {
+        /* printf("PC:%04X A:%02X X:%02X Y:%02X P:%02x SP:%02X CYC:%lu\n",
+            cpu.regs.PC,
+            cpu.regs.A,
+            cpu.regs.X,
+            cpu.regs.Y,
+            cpu.regs.P,
+            cpu.regs.SP,
+            cpu.getTotalCycles());
+        */
+        cpu.exec();
+    }
+
+    EXPECT_EQ(mem.read(0x0002), 0x00); /* Код выполнения */
+    EXPECT_EQ(memory.read(0x0003), 0x00); /* Код ошибки  */
 }
 
 
