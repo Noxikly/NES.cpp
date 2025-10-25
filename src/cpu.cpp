@@ -315,7 +315,7 @@ void Cpu::BRK() {
     push(regs.PC & 0xFF);
     push(regs.P | BREAK);
     set_flag(I, true);
-    regs.PC = read16(0xFFFE);
+    regs.PC = mem->ram[0xFFFE] | (mem->ram[0xFFFF] << 8);
 }
 
 void Cpu::RTI() {
@@ -416,12 +416,7 @@ void Cpu::ANE(u16 addr) {
 
 void Cpu::ARR(u16 addr) {
     AND(addr);
-    u8 oldA = regs.A;
     ROR_ACC();
-
-    set_flag(C, (oldA & 0x40) != 0);
-    set_flag(V, ((regs.A & 0x20) ^ ((regs.A & 0x40) >> 1)) != 0);
-    set_nz(regs.A);
 }
 
 void Cpu::DCP(u16 addr) {

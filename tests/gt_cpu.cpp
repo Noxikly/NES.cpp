@@ -417,8 +417,8 @@ TEST_F(CpuTest, RTS) {
 }
 
 TEST_F(CpuTest, BRK) {
-    mem.write(0xFFFE, 0x00);
-    mem.write(0xFFFF, 0x04);
+    mem.ram[0xFFFE] = 0x00;
+    mem.ram[0xFFFF] = 0x04;
     loadCode({0x00});
     cpu.exec();
 
