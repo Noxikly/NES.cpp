@@ -1,9 +1,7 @@
 #include "mapper0.hpp"
 
 
-Mapper0::Mapper0(Cartridge &cartridge)
-                 :Mapper(cartridge, MapperType::NROM)
-{
+Mapper0::Mapper0(Cartridge &cartridge): Mapper(cartridge) {
     mirrorMode = cartridge.getMirrorMode();
     cntBank = (cartridge.getPRG().size() == 0x4000) ? 1 : 0;
 

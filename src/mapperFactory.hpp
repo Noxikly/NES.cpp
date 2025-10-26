@@ -2,6 +2,7 @@
 #include "mapper.hpp"
 #include "mappers/mapper0.hpp"
 #include "mappers/mapper1.hpp"
+#include "mappers/mapper2.hpp"
 #include "cartridge.hpp"
 #include <memory>
 #include <stdexcept>
@@ -18,6 +19,8 @@ public:
                 return std::make_unique<Mapper0>(cart);
             case 1:  /* MMC1 */
                 return std::make_unique<Mapper1>(cart);
+            case 2:  /* UxROM */
+                return std::make_unique<Mapper2>(cart);
             
             default:
                 throw std::runtime_error("Маппер "+std::to_string(mapperNum)+" не поддерживается");
