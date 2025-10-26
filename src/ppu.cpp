@@ -364,7 +364,9 @@ auto Ppu::mirrorAddress(u16 addr) const -> u16 {
     u16 offset = addr & 0x03FF;
     u16 table = (addr >> 10) & 0x03;
 
-    switch (mirrorMode) {
+
+    u8 mode = mapper ? mapper->getMirrorMode() : mirrorMode;
+    switch (mode) {
         case HORIZONTAL:
             table = (table == 0 || table == 1) ? 0 : 1;
             break;  /* A,A,B,B */
