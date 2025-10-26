@@ -7,10 +7,8 @@ public:
         NROM = 0,
     };
 
-protected:
-    explicit Mapper(Cartridge& c, MapperType t)
-                    : cartridge(c), type(t){}
-    ~Mapper() = default;
+public:
+    virtual ~Mapper() = default;
 
 public:
     virtual u8 readPRG(u16 addr) = 0;
@@ -20,6 +18,10 @@ public:
     virtual void writeCHR(u16 addr, u8 value) = 0;
 
 protected:
+    explicit Mapper(Cartridge& c, MapperType t)
+                    : cartridge(c), type(t){}
+
+
     Cartridge &cartridge;
     MapperType type;
 };
