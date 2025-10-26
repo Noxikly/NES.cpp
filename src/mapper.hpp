@@ -16,6 +16,8 @@ public:
 
     virtual u8 readCHR(u16 addr) = 0;
     virtual void writeCHR(u16 addr, u8 value) = 0;
+    
+    virtual u8 getMirrorMode() { return mirrorMode; }
 
 protected:
     explicit Mapper(Cartridge& c, MapperType t)
@@ -24,4 +26,6 @@ protected:
 
     Cartridge &cartridge;
     MapperType type;
+
+    u8 mirrorMode{0};
 };

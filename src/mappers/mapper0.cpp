@@ -4,6 +4,7 @@
 Mapper0::Mapper0(Cartridge &cartridge)
                  :Mapper(cartridge, MapperType::NROM)
 {
+    mirrorMode = cartridge.getMirrorMode();
     cntBank = (cartridge.getPRG().size() == 0x4000) ? 1 : 0;
 
     chrRAM = cartridge.getCHR().empty();

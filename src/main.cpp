@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
         SDL_RenderPresent(win.r);
 
 
-        SDL_Delay(1000/100);
+        SDL_Delay(1000/60);
     }
 
     sdl_free(&win);
