@@ -6,9 +6,8 @@ Mapper2::Mapper2(Cartridge &cartridge): Mapper(cartridge) {
     cntBank = cartridge.getPRG().size() / 0x4000;
 
 
-    if (cartridge.getCHR().empty()) {
+    if (cartridge.getCHR().empty())
         cartridge.getCHR().resize(0x2000, 0);
-    }
 }
 
 
@@ -24,11 +23,7 @@ u8 Mapper2::readPRG(u16 addr) {
     }
 }
 
-
-void Mapper2::writePRG(u16 /*addr*/, u8 value) {
-    prgBank = value & 0x0F;
-}
-
+void Mapper2::writePRG(u16 /*addr*/, u8 value) { prgBank = value & 0x0F; }
 
 u8 Mapper2::readCHR(u16 addr) {
     addr &= 0x1FFF;

@@ -46,7 +46,6 @@ u8 Mapper1::readPRG(u16 addr) {
     return 0;
 }
 
-
 void Mapper1::writePRG(u16 addr, u8 value) {
     if (value & 0x80) {
         shiftReg = 0x10;
@@ -90,7 +89,6 @@ void Mapper1::writePRG(u16 addr, u8 value) {
     }
 }
 
-
 u8 Mapper1::readCHR(u16 addr) {
     addr &= 0x1FFF;
     
@@ -113,7 +111,6 @@ u8 Mapper1::readCHR(u16 addr) {
     return cartridge.getCHR()[(bankOffset + addr) % cartridge.getCHR().size()];
 }
 
-
 void Mapper1::writeCHR(u16 addr, u8 value) {
     if (!chrRAM) return;
     addr &= 0x1FFF;
@@ -121,14 +118,14 @@ void Mapper1::writeCHR(u16 addr, u8 value) {
     u8 chrMode = (control >> 4) & 0x01;
     u32 bankOffset;
     
-    if (chrMode == 0) {
+    if (chrMode == 0)
         /* 8KB mode */
         bankOffset = (chrBank0 & 0xFE) * 0x1000;
-    } else {
+    else {
         /* 4KB mode */
-        if (addr < 0x1000) {
+        if (addr < 0x1000)
             bankOffset = chrBank0 * 0x1000;
-        } else {
+        else {
             bankOffset = chrBank1 * 0x1000;
             addr -= 0x1000;
         }
