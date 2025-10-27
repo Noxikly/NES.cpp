@@ -4,11 +4,11 @@
 
 class Ppu {
 public:
-    explicit Ppu() { 
-        vram.fill(0); 
+    explicit Ppu() {
+        vram.fill(0);
         pal.fill(0);
-        oam.fill(0); 
-        frame.fill(0); 
+        oam.fill(0);
+        frame.fill(0);
     }
     ~Ppu() = default;
 
@@ -26,10 +26,11 @@ public:
 
 public:
     enum : u8 {
-        HORIZONTAL = 0, /* Горизонтальный миррор */
-        VERTICAL   = 1, /* Вертикальный миррор   */
-        FOUR       = 2, /* Четыре экрана         */
-        SINGLE     = 3  /* Один экран            */
+        HORIZONTAL  = 0, /* Горизонтальный миррор */
+        VERTICAL    = 1, /* Вертикальный миррор   */
+        FOUR        = 2, /* Четыре экрана         */
+        SINGLE_DOWN = 3, /* Один экран (нижний)   */
+        SINGLE_UP   = 4, /* Один экран (верхний)  */
     };
 
     bool frameReady = false;
@@ -42,9 +43,10 @@ private:
     u8 oamaddr{0};
 
     /* Счетчики */
-    u16  dot{0};
+    u16  pixel{0};
     i16  scanline{0};
     bool nmi{false};
+
 
     /* Регистры прокрутки */
     u8  w{0};          /* Переключатель записи (0/1) */
@@ -52,7 +54,7 @@ private:
     u16 v{0};          /* Текущий адрес VRAM         */
     u16 t{0};          /* Временный адрес VRAM       */
     u8  dataBuffer{0}; /* Буфер для чтения PPUDATA   */
-    
+
     u8 mirrorMode{HORIZONTAL};
     Mapper* mapper{nullptr};
 
@@ -78,8 +80,8 @@ private:
 
 
     void incrementX() { v = ((v & 0x001F) == 31) ? (v&~0x001F) ^ 0x0400 : v+1; }
-    
     void incrementY();
+
     void reloadX() { v = (v & ~0x041F) | (t & 0x041F); }
     void reloadY() { v = (v & ~0x7BE0) | (t & 0x7BE0); }
 };

@@ -34,8 +34,8 @@ int sdl_init(Window* win) {
         return 0;
     }
 
-    win->t = SDL_CreateTexture(win->r, 
-                               SDL_PIXELFORMAT_ARGB8888, 
+    win->t = SDL_CreateTexture(win->r,
+                               SDL_PIXELFORMAT_ARGB8888,
                                SDL_TEXTUREACCESS_STREAMING,
                                WIDTH, HEIGHT);
     if (!win->t) {
@@ -87,8 +87,7 @@ int main(int argc, char **argv) {
 
     Ppu ppu;
     ppu.setMapper(mapper.get());
-    ppu.setMirror(cart.getMirrorMode());
-    
+
     Memory mem(mapper.get(), &ppu);
     Cpu cpu(&mem);
     cpu.reset();
@@ -110,7 +109,7 @@ int main(int argc, char **argv) {
         while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_EVENT_QUIT)
                 running = false;
-            
+
             if (ev.type == SDL_EVENT_KEY_DOWN) {
                 switch (ev.key.scancode) {
                     case SDL_SCANCODE_ESCAPE: running = false; break;
@@ -123,9 +122,9 @@ int main(int argc, char **argv) {
                     case SDL_SCANCODE_X:      joy |= 0x02; break; /* B       */
                     case SDL_SCANCODE_Z:      joy |= 0x01; break; /* A       */
                     default: break;
-                } 
+                }
             }
-            
+
             if (ev.type == SDL_EVENT_KEY_UP) {
                 switch (ev.key.scancode) {
                     case SDL_SCANCODE_D:      joy &= ~0x80; break; /* Вправо  */
@@ -152,7 +151,7 @@ int main(int argc, char **argv) {
 
             for (int i=0; i<3; ++i) {
                 ppu.cycle();
-                
+
                 if (ppu.frameReady) {
                     ppu.frameReady = false;
                     frameCompleted = true;
@@ -164,6 +163,11 @@ int main(int argc, char **argv) {
             if (ppu.nmiPending()) {
                 cpu.do_nmi = true;
                 ppu.clearNmi();
+            }
+
+            if (mapper->irqFlag) {
+                cpu.do_irq = true;
+                mapper->irqFlag = false;
             }
         }
 
