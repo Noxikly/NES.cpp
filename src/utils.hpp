@@ -19,7 +19,7 @@ inline constexpr u16 MIRROR = 0x07FF;
 inline constexpr u16 STACK = 0x0100;
 
 
-inline constexpr u16 DOTS   = 341;
+inline constexpr u16 PIXELS   = 341;
 inline constexpr u16 LINES  = 262;
 inline constexpr u16 WIDTH  = 256;
 inline constexpr u16 HEIGHT = 240;
