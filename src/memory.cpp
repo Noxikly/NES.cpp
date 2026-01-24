@@ -27,8 +27,8 @@ auto Memory::read(u16 addr) const -> u8 {
     if (addr >= 0x6000 && addr < 0x8000) {
         return mapper ? mapper->readRAM(addr) : 0;
     }
-    if (addr >= 0x8000 && mapper) {
-        return mapper->readPRG(addr);
+    if (addr >= 0x8000) {
+        return mapper ? mapper->readPRG(addr) : 0;
     }
     return 0;
 }
@@ -66,8 +66,8 @@ void Memory::write(u16 addr, u8 value) {
         if (mapper) mapper->writeRAM(addr, value);
         return;
     }
-    if (addr >= 0x8000 && mapper) {
-        mapper->writePRG(addr, value);
+    if (addr >= 0x8000) {
+        if (mapper) mapper->writePRG(addr, value);
         return;
     }
 }

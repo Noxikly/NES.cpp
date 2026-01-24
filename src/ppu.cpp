@@ -85,7 +85,7 @@ void Ppu::writeReg(u16 addr, u8 data) {
 
 
 
-void Ppu::cycle() {
+void Ppu::step() {
     if (++pixel >= PIXELS) {
         pixel = 0;
         if (++scanline >= LINES)
@@ -106,7 +106,7 @@ void Ppu::cycle() {
     }
 
 
-    if (scanline == 241 && pixel == 0) {
+    if (scanline == 241 && pixel == 1) {
         ppustatus |= 0x80;
         if (ppuctrl & 0x80) nmi = true;
         frameReady = true;
@@ -129,7 +129,7 @@ void Ppu::renderPixel() {
 
     u8 bgPixel = 0, bgPal = 0;
     if (ppumask & 0x08)
-        backgroundPixel(x, y, bgPixel, bgPal);
+        backgroundPixel(x, bgPixel, bgPal);
 
 
     u8 fgPixel = 0, fgPal = 0, fgPrio = 0;
@@ -144,7 +144,7 @@ void Ppu::renderPixel() {
     }
 
 
-    if (sprite0 && bgPixel != 0 && fgPixel != 0 && x != 255)
+    if (sprite0 && bgPixel != 0 && x != 255)
         ppustatus |= 0x40;
 
 
@@ -160,11 +160,11 @@ void Ppu::renderPixel() {
 
 
     u16 paletteAddr = (px == 0) ? 0x3F00 : (0x3F00 + (palIdxGroup << 2) + px);
-    frame[y * WIDTH + x] = rgb(readVRAM(paletteAddr));
+    frame[y * WIDTH + x] = palette[getPalette(paletteAddr)];
 }
 
 
-void Ppu::backgroundPixel(u8 x, u8 /*y*/, u8 &pixel, u8 &pal) {
+void Ppu::backgroundPixel(u8 x, u8 &pixel, u8 &pal) {
     u16 coarseX = (v >> 0) & 0x1F;
     u16 coarseY = (v >> 5) & 0x1F;
     u16 fineY = (v >> 12) & 0x07;
@@ -214,7 +214,7 @@ void Ppu::spritePixel(u8 x, u8 y, u8 &pixel, u8 &pal, u8 &prio, bool &sprite0) {
 
     for (u8 i = 0; i < 64; ++i) {
 
-        u8 yPos = oam[i * 4];
+        u8 yPos = oam[i * 4] + 1;
         if (y < yPos || y >= yPos + height) continue;
 
         u8 tile = oam[i * 4 + 1];
@@ -266,29 +266,6 @@ void Ppu::spritePixel(u8 x, u8 y, u8 &pixel, u8 &pal, u8 &prio, bool &sprite0) {
 }
 
 
-void Ppu::incrementY() {
-    if ((v & 0x7000) != 0x7000) {
-        v += 0x1000;
-        return;
-    }
-
-
-    v &= ~0x7000;
-    u16 y = (v & 0x03E0) >> 5;
-
-    if (y == 29) {
-        y = 0;
-        v ^= 0x0800;
-    } else if (y == 31) {
-        y = 0;
-    } else {
-        y++;
-    }
-
-    v = (v & ~0x03E0) | (y << 5);
-}
-
-
 auto Ppu::readVRAM(u16 addr) const -> u8 {
     addr &= 0x3FFF;
 
@@ -304,7 +281,7 @@ auto Ppu::readVRAM(u16 addr) const -> u8 {
         /* Зеркалирование $10/$14/$18/$1C в $00/$04/$08/$0C */
         if ((idx & 0x03) == 0 && idx >= 0x10)
             idx &= 0x0F;
-        return pal[idx] & 0x3F;
+        return pal[idx] & ((ppumask & 0x01) ? 0x30: 0x3F);
     }
 
     return 0;
@@ -325,7 +302,7 @@ void Ppu::writeVRAM(u16 addr, u8 data) {
         /* Зеркалирование записи в $10/$14/$18/$1C */
         if ((idx & 0x03) == 0 && idx >= 0x10)
             pal[idx & 0x0F] = data & 0x3F;
-        pal[idx] = data & 0x3F;
+        pal[idx] = data;
     }
 }
 
@@ -335,43 +312,14 @@ auto Ppu::mirrorAddress(u16 addr) const -> u16 {
     u16 offset = addr & 0x03FF;
     u16 table = (addr >> 10) & 0x03;
 
-
-    u8 mode = mapper ? mapper->getMirrorMode() : mirrorMode;
+    u8 mode = mapper ? mapper->mirrorMode : mirrorMode;
     switch (mode) {
-        case HORIZONTAL:
-            table = (table < 2) ? 0 : 1;
-            break;  /* A,A,B,B */
-
-        case VERTICAL:
-            table &= 1;
-            break;  /* A,B,A,B */
-
-        case SINGLE_DOWN:
-            table = 0;
-            break;  /* A,A,A,A */
-
-        case SINGLE_UP:
-            table = 1;
-            break;  /* B,B,B,B */
-
-        case FOUR:
-            break;  /* A,B,A,B */
+        case HORIZONTAL: table = (table < 2) ? 0 : 1; break;  /* A,A,B,B */
+        case VERTICAL: table &= 1; break;   /* A,B,A,B */
+        case SINGLE_DOWN: table = 0; break; /* A,A,A,A */
+        case SINGLE_UP: table = 1; break;   /* B,B,B,B */
+        case FOUR: break;                   /* A,B,C,D */
     }
 
     return (table * 0x400) + offset;
-}
-
-
-auto Ppu::rgb(u8 palIdx) const -> u32 {
-    palIdx &= 0x3F;
-    u8 r = paletteRGB[palIdx * 3];
-    u8 g = paletteRGB[palIdx * 3 + 1];
-    u8 b = paletteRGB[palIdx * 3 + 2];
-    return (0xFF << 24) | (r << 16) | (g << 8) | b;
-}
-
-
-void Ppu::copyFrame(u32 *rgba) const {
-    for (u16 i=0; i<WIDTH * HEIGHT; ++i)
-        rgba[i] = frame[i];
 }

@@ -4,8 +4,7 @@
 #include "cpu.hpp"
 #include "memory.hpp"
 #include "ppu.hpp"
-#include "cartridge.hpp"
-#include "mapperFactory.hpp"
+#include "mapper.hpp"
 
 
 
@@ -65,30 +64,21 @@ int main(int argc, char **argv) {
     }
 
 
-    Cartridge cart;
+    Mapper mapper;
     try {
-        cart.loadNES(argv[1]);
+        mapper.loadNES(argv[1]);  // Загружаем ROM в маппер
+        mapper.load();            // Загружаем Lua скрипт маппера
     }
     catch (const std::exception& e) {
-        std::cerr << "Ошибка ROM: " << e.what() << std::endl;
-        return 1;
-    }
-
-
-    std::unique_ptr<Mapper> mapper;
-    try {
-        mapper = MapperFactory::createMapper(cart);
-    }
-    catch (const std::exception& e) {
-        std::cerr << "Ошибка маппера: " << e.what() << std::endl;
+        std::cerr << "Ошибка загрузки: " << e.what() << std::endl;
         return 1;
     }
 
 
     Ppu ppu;
-    ppu.setMapper(mapper.get());
+    ppu.setMapper(&mapper);
 
-    Memory mem(mapper.get(), &ppu);
+    Memory mem(&mapper, &ppu);
     Cpu cpu(&mem);
     cpu.reset();
 
@@ -98,7 +88,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    u32 pixels[WIDTH * HEIGHT];
+
     bool running = true;
     SDL_Event ev;
     u8 joy = 0;
@@ -149,8 +139,8 @@ int main(int argc, char **argv) {
             cpu.exec();
 
 
-            for (int i=0; i<3; ++i) {
-                ppu.cycle();
+            for (u8 i=0; i<3; ++i) {
+                ppu.step();
 
                 if (ppu.frameReady) {
                     ppu.frameReady = false;
@@ -165,15 +155,14 @@ int main(int argc, char **argv) {
                 ppu.clearNmi();
             }
 
-            if (mapper->irqFlag) {
+            if (mapper.irqFlag) {
                 cpu.do_irq = true;
-                mapper->irqFlag = false;
+                mapper.irqFlag = false;
             }
         }
 
 
-        ppu.copyFrame(pixels);
-        SDL_UpdateTexture(win.t, nullptr, pixels, WIDTH * sizeof(u32));
+        SDL_UpdateTexture(win.t, nullptr, ppu.getFrame(), WIDTH * sizeof(u32));
         SDL_RenderClear(win.r);
         SDL_RenderTexture(win.r, win.t, nullptr, nullptr);
         SDL_RenderPresent(win.r);

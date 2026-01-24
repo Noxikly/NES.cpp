@@ -14,6 +14,7 @@ public:
 
     auto isPageCrossed() const -> bool { return page_crossed; }
     auto getTotalCycles() const -> u64 { return total_cycles; }
+    auto getCycles() const -> u16      { return cycles; }
 
 public:
     enum : u8 {
@@ -41,7 +42,7 @@ public:
 private:
     Memory *mem{nullptr};
 
-    u8  cycles{0};            /* Счетчик циклов для текущей инструкции */
+    u16  cycles{0};            /* Счетчик циклов для текущей инструкции */
     u64 total_cycles{0};      /* Счетчик циклов для всех инструкций    */
     bool page_crossed{false}; /* Флаг пересечения границы страницы     */
 
