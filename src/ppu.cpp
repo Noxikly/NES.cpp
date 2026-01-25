@@ -17,8 +17,15 @@ auto Ppu::readReg(u16 addr) -> u8 {
 
         case 7: {  /* PPUDATA */
             u16 a = v & 0x3FFF;
-            u8 val = (a>=0x3F00) ? readVRAM(a) : dataBuffer;
-            dataBuffer = readVRAM((a>=0x3F00) ? a&0x2FFF : a);
+            u8 val;
+            
+            if (a >= 0x3F00) {
+                val = readVRAM(a);
+                dataBuffer = readVRAM(a & 0x2FFF);
+            } else {
+                val = dataBuffer;
+                dataBuffer = readVRAM(a);
+            }
 
             v += (ppuctrl & 0x04) ? 32 : 1;
             return val;
@@ -52,24 +59,20 @@ void Ppu::writeReg(u16 addr, u8 data) {
 
         case 5:  /* PPUSCROLL */
             if (w == 0) {
-                /* X scroll */
                 t = (t & ~0x001F) | (data >> 3);
                 fineX = data & 0x07;
                 w = 1;
             } else {
-                /* Y scroll */
-                t = (t & ~0x73E0) | ((data & 0xF8) << 2) | ((data & 0x07) << 12);
+                t = (t & 0x0C1F) | ((data & 0xF8) << 2) | ((data & 0x07) << 12);
                 w = 0;
             }
             break;
 
         case 6:  /* PPUADDR */
             if (w == 0) {
-                /* Старший байт */
                 t = ((data & 0x3F) << 8) | (t & 0x00FF);
                 w = 1;
             } else {
-                /* Младший байт */
                 t = (t & 0xFF00) | data;
                 v = t;
                 w = 0;
@@ -84,22 +87,23 @@ void Ppu::writeReg(u16 addr, u8 data) {
 }
 
 
-
 void Ppu::step() {
-    if (++pixel >= PIXELS) {
-        pixel = 0;
-        if (++scanline >= LINES)
-            scanline = 0;
-    }
+    const bool rendering = (ppumask & 0x18) != 0;
+    const bool preLine = (scanline == 261);
+    const bool visible = (scanline < 240);
+    const bool renderLine = (visible || preLine);
 
-    bool rendering = (ppumask & 0x18) != 0;
-    bool preLine = (scanline == 261);
-    bool visible = (scanline < HEIGHT || preLine);
 
-    if (scanline < HEIGHT && pixel > 0 && pixel < 257)
+    if (visible && pixel == 0 && (ppumask & 0x10))
+        evalSprites();
+
+    if (visible && pixel >= 1 && pixel <= 256)
         renderPixel();
 
-    if (visible && rendering) {
+
+    /* Background fetches и scrolling */
+    if (renderLine && rendering) {
+        if (pixel >= 1 && pixel <= 256 && (pixel & 7) == 0) incrementX();
         if (pixel == 256) incrementY();
         if (pixel == 257) reloadX();
         if (preLine && pixel >= 280 && pixel <= 304) reloadY();
@@ -107,31 +111,81 @@ void Ppu::step() {
 
 
     if (scanline == 241 && pixel == 1) {
-        ppustatus |= 0x80;
-        if (ppuctrl & 0x80) nmi = true;
+        ppustatus |= 0x80;  /* VBlank flag */
+        if (ppuctrl & 0x80)
+            nmi = true;
         frameReady = true;
     }
 
+
     if (preLine && pixel == 1) {
-        ppustatus &= 0x1F;
+        ppustatus &= 0x1F;  /* Очистка VBlank, sprite 0 hit, sprite overflow */
         nmi = false;
+        frameReady = false;
     }
 
-    if (mapper && pixel == 260 && scanline < 240)
+
+    if (preLine && pixel == 339 && rendering && oddFrame) pixel = 340;
+
+
+    /* Mapper */
+    if (mapper && pixel == 260 && visible && rendering)
         mapper->step();
+
+
+    if (++pixel > 340) {
+        pixel = 0;
+        if (++scanline > 261) {
+            scanline = 0;
+            oddFrame = !oddFrame;
+        }
+    }
+}
+
+
+void Ppu::evalSprites() {
+    spriteCount = 0;
+    bool overflow = false;
+
+    const u8 height = (ppuctrl & 0x20) ? 16 : 8;
+    const u8 y = scanline;
+
+
+    for (u8 i = 0; i<64; ++i) {
+        const u8 spriteY = oam[i * 4] + 1;
+        if (y < spriteY || y >= spriteY + height) continue;
+
+
+        if (spriteCount < 8) {
+            OAM[spriteCount] = {
+                spriteY,         /* y        */
+                oam[i * 4 + 1],  /* tile     */
+                oam[i * 4 + 2],  /* attr     */
+                oam[i * 4 + 3],  /* x        */
+                i                /* orig idx */
+            };
+            spriteCount++;
+        } else {
+            overflow = true;
+        }
+    }
+
+    if (overflow)
+        ppustatus |= 0x20;
 }
 
 
 void Ppu::renderPixel() {
-    u8 x = pixel - 1;
-    u8 y = scanline;
+    const u8 x = pixel - 1;
+    const u8 y = scanline;
 
-
+    /* Background */
     u8 bgPixel = 0, bgPal = 0;
-    if (ppumask & 0x08)
+    if (ppumask & 0x08) {
         backgroundPixel(x, bgPixel, bgPal);
+    }
 
-
+    /* Sprites */
     u8 fgPixel = 0, fgPal = 0, fgPrio = 0;
     bool sprite0 = false;
     if (ppumask & 0x10)
@@ -144,63 +198,81 @@ void Ppu::renderPixel() {
     }
 
 
-    if (sprite0 && bgPixel != 0 && x != 255)
+    if (sprite0 && bgPixel!=0 && fgPixel!=0 && x<255)
         ppustatus |= 0x40;
 
 
     u8 px = bgPixel;
-    u8 palIdxGroup = bgPal;
+    u8 palGroup = bgPal;
 
     if (fgPixel != 0) {
         if (bgPixel == 0 || fgPrio == 0) {
             px = fgPixel;
-            palIdxGroup = fgPal + 4;
+            palGroup = fgPal + 4;
         }
     }
 
 
-    u16 paletteAddr = (px == 0) ? 0x3F00 : (0x3F00 + (palIdxGroup << 2) + px);
-    frame[y * WIDTH + x] = palette[getPalette(paletteAddr)];
+    u16 paletteAddr = 0x3F00;
+    if (px != 0)
+        paletteAddr = 0x3F00 + (palGroup << 2) + px;
+
+
+    u8 colorIdx = readVRAM(paletteAddr) & 0x3F;
+    if (ppumask & 0x01)
+        colorIdx &= 0x30;
+
+    frame[y*WIDTH + x] = palette[colorIdx];
 }
 
 
 void Ppu::backgroundPixel(u8 x, u8 &pixel, u8 &pal) {
-    u16 coarseX = (v >> 0) & 0x1F;
-    u16 coarseY = (v >> 5) & 0x1F;
-    u16 fineY = (v >> 12) & 0x07;
+    const u16 fineY = (v >> 12) & 0x07;
+    const u16 patternBase = (ppuctrl & 0x10) ? 0x1000 : 0x0000;
 
 
-    u16 pixelX = (coarseX * 8 + fineX + x) & 0x1FF;
-    u16 pixelY = (coarseY * 8 + fineY) & 0x1FF;
+    /* Следующий тайл */
+    auto nextVX = [&](u16 vv) -> u16 {
+        if ((vv & 0x001F) == 31) return (vv & ~0x001F) ^ 0x0400;
+        return vv + 1;
+    };
 
 
-    u16 ntX = (v >> 10) & 0x01;
-    u16 ntY = (v >> 11) & 0x01;
-    if (pixelX >= 256) { ntX ^= 1; pixelX -= 256; }
-    if (pixelY >= 240) { ntY ^= 1; pixelY -= 240; }
+    /* загрузка данных о тайле */
+    auto fetchTile = [&](u16 vv, u8 &tileId, u8 &palOut, u8 &low, u8 &high) {
+        const u16 nameAddr = 0x2000 | (vv & 0x0FFF);
+        tileId = readVRAM(nameAddr);
 
-    u16 tileX = pixelX >> 3;
-    u8 fX = pixelX & 7;
-    u16 tileY = pixelY >> 3;
+        const u16 attrAddr = 0x23C0 | (vv & 0x0C00) | ((vv >> 4) & 0x38) | ((vv >> 2) & 0x07);
+        const u8  attr     = readVRAM(attrAddr);
+        const u8  shift    = ((vv >> 4) & 4) | (vv & 2); /* {0,2,4,6} */
+        palOut = (attr >> shift) & 3;
 
-
-    u16 ntBase = 0x2000 | (ntX << 10) | (ntY << 11);
-    u16 nameAddr = ntBase + tileY * 32 + tileX;
-    u8  tileId = readVRAM(nameAddr);
-
-
-    u16 attrAddr = ntBase + 0x3C0 + (tileY >> 2) * 8 + (tileX >> 2);
-    u8 attr = readVRAM(attrAddr);
-    u8 shift = ((tileX & 2) ? 2 : 0) | ((tileY & 2) ? 4 : 0);
-    pal = (attr >> shift) & 3;
+        const u16 pat = patternBase + tileId * 16 + fineY;
+        low  = readVRAM(pat);
+        high = readVRAM(pat + 8);
+    };
 
 
-    u16 patternBase = (ppuctrl & 0x10) ? 0x1000 : 0x0000;
-    u16 patternAddr = patternBase + tileId * 16 + fineY;
-    u8 low = readVRAM(patternAddr);
-    u8 high = readVRAM(patternAddr + 8);
+    u8 t0, p0, l0, h0;
+    u8 t1, p1, l1, h1;
+    fetchTile(v,         t0, p0, l0, h0);
+    fetchTile(nextVX(v), t1, p1, l1, h1);
 
-    u8 bit = 7 - fX;
+    const u8 dot = x & 7;       /* пиксель внутри 8-пиксельного блока */
+    const u8 idx = fineX + dot; /* 0..14 */
+
+    u8 low = l0, high = h0;
+    pal = p0;
+
+    if (idx >= 8) {
+        low = l1; 
+        high = h1;
+        pal = p1;
+    }
+
+    const u8 subX = idx & 7;
+    const u8 bit  = 7 - subX;
     pixel = ((low >> bit) & 1) | (((high >> bit) & 1) << 1);
 }
 
@@ -209,58 +281,49 @@ void Ppu::spritePixel(u8 x, u8 y, u8 &pixel, u8 &pal, u8 &prio, bool &sprite0) {
     pixel = 0;
     sprite0 = false;
 
-    u8 height = (ppuctrl & 0x20) ? 16 : 8;  /* 8x8 или 8x16 режим */
+    const u8 height = (ppuctrl & 0x20) ? 16 : 8;
 
 
-    for (u8 i = 0; i < 64; ++i) {
+    for (u8 i = 0; i < spriteCount; ++i) {
+        const auto& spr = OAM[i];
 
-        u8 yPos = oam[i * 4] + 1;
-        if (y < yPos || y >= yPos + height) continue;
+        if (x < spr.x || x >= spr.x + 8) continue;
+        int dx = int(x) - int(spr.x);
+        if (dx < 0 || dx >= 8) continue;
 
-        u8 tile = oam[i * 4 + 1];
-        u8 attr = oam[i * 4 + 2];
-        u8 xPos = oam[i * 4 + 3];
+        u8 fineY = y - spr.y;
+        const bool flipV = (spr.attr & 0x80) != 0;
+        const bool flipH = (spr.attr & 0x40) != 0;
 
-
-        if (x < xPos || x >= xPos + 8) continue;
-
-        /* Расчет позиции внутри спрайта */
-        u8 fineY = y - yPos;
-        bool flipV = (attr & 0x80) != 0;
-        bool flipH = (attr & 0x40) != 0;
-
-        if (flipV) {
+        if (flipV)
             fineY = height - 1 - fineY;
-        }
 
 
         u16 patAddr;
         if (height == 16) {
-            u16 bank = (tile & 1) ? 0x1000 : 0x0000;
-            u16 tileIndex = (tile & 0xFE) + ((fineY >= 8) ? 1 : 0);
-            u8 row = fineY & 7;
+            const u16 bank = (spr.tile & 1) ? 0x1000 : 0x0000;
+            const u16 tileIndex = (spr.tile & 0xFE) + ((fineY >= 8) ? 1 : 0);
+            const u8 row = fineY & 7;
             patAddr = bank + tileIndex * 16 + row;
         } else {
             u16 bank = (ppuctrl & 0x08) ? 0x1000 : 0x0000;
-            patAddr = bank + tile * 16 + fineY;
+            patAddr = bank + spr.tile * 16 + fineY;
         }
 
-
-        u8 low = readVRAM(patAddr);
-        u8 high = readVRAM(patAddr + 8);
-        u8 bit = flipH ? (x - xPos) : (7 - (x - xPos));
-        u8 sprPixel = ((low >> bit) & 1) | (((high >> bit) & 1) << 1);
-
+        const u8 low = readVRAM(patAddr);
+        const u8 high = readVRAM(patAddr + 8);
+        const u8 bit = flipH ? u8(dx) : u8(7 - dx);
+        const u8 sprPixel = ((low >> bit) & 1) | (((high >> bit) & 1) << 1);
 
         if (sprPixel == 0) continue;
 
         if (pixel == 0) {
             pixel = sprPixel;
-            pal = attr & 3;
-            prio = (attr >> 5) & 1;
+            pal = spr.attr & 3;
+            prio = (spr.attr >> 5) & 1;
         }
 
-        if (i == 0 && sprPixel != 0)
+        if (spr.id == 0 && sprPixel != 0)
             sprite0 = true;
     }
 }
@@ -272,21 +335,21 @@ auto Ppu::readVRAM(u16 addr) const -> u8 {
     if (addr < 0x2000) {
         return mapper ? mapper->readCHR(addr) : 0;
     }
+    
     if (addr < 0x3F00) {
         return vram[mirrorAddress(addr)];
     }
 
     if (addr < 0x4000) {
         u8 idx = addr & 0x1F;
-        /* Зеркалирование $10/$14/$18/$1C в $00/$04/$08/$0C */
-        if ((idx & 0x03) == 0 && idx >= 0x10)
+        /* Зеркалирование 0x3F10/14/18/1C -> 0x3F00/04/08/0C */
+        if ((idx & 0x13) == 0x10)
             idx &= 0x0F;
-        return pal[idx] & ((ppumask & 0x01) ? 0x30: 0x3F);
+        return pal[idx] & 0x3F;
     }
 
     return 0;
 }
-
 
 void Ppu::writeVRAM(u16 addr, u8 data) {
     addr &= 0x3FFF;
@@ -299,26 +362,26 @@ void Ppu::writeVRAM(u16 addr, u8 data) {
     }
     else if (addr < 0x4000) {
         u8 idx = addr & 0x1F;
-        /* Зеркалирование записи в $10/$14/$18/$1C */
-        if ((idx & 0x03) == 0 && idx >= 0x10)
-            pal[idx & 0x0F] = data & 0x3F;
-        pal[idx] = data;
+        /* Зеркалирование записи 0x3F10/14/18/1C -> 0x3F00/04/08/0C  */
+        if ((idx & 0x13) == 0x10)
+            idx &= 0x0F;
+        pal[idx] = data & 0x3F;
     }
 }
 
 
 auto Ppu::mirrorAddress(u16 addr) const -> u16 {
     addr = 0x2000 + (addr & 0x0FFF);
-    u16 offset = addr & 0x03FF;
+    const u16 offset = addr & 0x03FF;
     u16 table = (addr >> 10) & 0x03;
 
-    u8 mode = mapper ? mapper->mirrorMode : mirrorMode;
+    const u8 mode = mapper ? mapper->mirrorMode : mirrorMode;
     switch (mode) {
-        case HORIZONTAL: table = (table < 2) ? 0 : 1; break;  /* A,A,B,B */
-        case VERTICAL: table &= 1; break;   /* A,B,A,B */
-        case SINGLE_DOWN: table = 0; break; /* A,A,A,A */
-        case SINGLE_UP: table = 1; break;   /* B,B,B,B */
-        case FOUR: break;                   /* A,B,C,D */
+        case HORIZONTAL:   table = (table < 2) ? 0 : 1; break; /* A,A,B,B */
+        case VERTICAL:     table &= 1; break;                  /* A,B,A,B */
+        case SINGLE_DOWN:  table = 0; break;                   /* A,A,A,A */
+        case SINGLE_UP:    table = 1; break;                   /* B,B,B,B */
+        case FOUR:         break;                              /* A,B,C,D */
     }
 
     return (table * 0x400) + offset;

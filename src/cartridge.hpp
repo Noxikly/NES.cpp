@@ -42,16 +42,11 @@ public:
     }
 
 public:
+    std::vector<u8> PRG_ROM; /* Program ROM (код)                 */
+    std::vector<u8> PRG_RAM = std::vector<u8>(0x2000, 0); /* SRAM */
+    std::vector<u8> CHR_ROM; /* Character ROM (спрайты)           */
+    u8 mapperNumber{0};      /* Номер маппера (0-255)             */
+    u8 mirrorMode{0};        /* 0 = horizontal, 1 = vertical      */
 
-
-protected:
-    std::vector<u8> PRG_ROM; /* Program ROM (код)            */
-    std::vector<u8> CHR_ROM; /* Character ROM (спрайты)      */
-    u8 mapperNumber{0};      /* Номер маппера (0-255)        */
-
-public:
-    u8 mirrorMode{0};        /* 0 = horizontal, 1 = vertical */
-
-    std::array<u8, 0x2000> PRG_RAM{};
     bool irqFlag{false};
 };

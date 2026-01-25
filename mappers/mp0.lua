@@ -1,32 +1,30 @@
 -- Mapper 0 (NROM) --
-local bit = require("bit")
-local band = bit.band
-
+local lib = require("lib")
 
 local mp0 = {}
 
 function mp0:init()
     self.cntBank = prgSize == 0x4000 and 1 or 0
     if chrSize == 0 then
-        CHRresize(0x2000)
+        lib.resizeCHR(0x2000)
     end
 end
 
 function mp0:readPRGAddr(addr)
     addr = addr - 0x8000
     if self.cntBank == 1 then
-        addr = band(addr, 0x3FFF)
+        addr = lib.band(addr, 0x3FFF)
     end
     return addr
 end
 
 function mp0:readCHRAddr(addr)
-    return band(addr, 0x1FFF)
+    return lib.band(addr, 0x1FFF)
 end
 
 function mp0:writeCHRAddr(addr, value)
     if chrSize == 0 then
-        return band(addr, 0x1FFF)
+        return lib.band(addr, 0x1FFF)
     end
     return nil
 end

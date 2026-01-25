@@ -1,5 +1,9 @@
 #pragma once
-#include <lua.hpp>
+extern "C" {
+    #include <luajit-2.1/luajit.h>
+    #include <luajit-2.1/lualib.h>
+    #include <luajit-2.1/lauxlib.h>
+}
 #include <stdexcept>
 #include <string>
 #include "cartridge.hpp"
@@ -14,16 +18,30 @@ class Lua : public Cartridge {
     static constexpr int IDX_STEP = 6;
 
 public:
-    explicit Lua() : L(luaL_newstate()) { luaL_openlibs(L); }
+    explicit Lua() : L(luaL_newstate()) {
+        luaL_openlibs(L);
+        luaJIT_setmode(L, 0, LUAJIT_MODE_ENGINE | LUAJIT_MODE_ON);
+    }
     ~Lua() { if(L) lua_close(L); }
 
 
     void open(const std::string& path) {
         lua_pushlightuserdata(L, this);
-        lua_setglobal(L, "__cpp_instance");
+        lua_setglobal(L, "__instance");
 
-        regVars(L);
+        luaL_dostring(L, "package.path = 'mappers/?.lua;' .. package.path");
 
+        lua_pushinteger(L, PRG_ROM.size());
+        lua_setglobal(L, "prgSize");
+
+        lua_pushinteger(L, PRG_RAM.size());
+        lua_setglobal(L, "prgRamSize");
+
+        lua_pushinteger(L, CHR_ROM.size());
+        lua_setglobal(L, "chrSize");
+
+
+        /* Загружаем файл */
         if(luaL_dofile(L, path.c_str()) != LUA_OK)
             throw std::runtime_error("[LUA]: "+std::string(lua_tostring(L, -1)));
 
@@ -40,18 +58,18 @@ public:
             lua_pop(L, 1);
         }
 
-        /* Кэшируем функции на стеке */
+        /* Кэшируем функции */
         cacheFunc("readPRGAddr");
         cacheFunc("readCHRAddr");
         cacheFunc("writePRGAddr");
         cacheFunc("writeCHRAddr");
         cacheFunc("step");
 
-        hasReadPRG = !lua_isnil(L, IDX_READ_PRG);
-        hasReadCHR = !lua_isnil(L, IDX_READ_CHR);
+        hasReadPRG  = !lua_isnil(L, IDX_READ_PRG);
+        hasReadCHR  = !lua_isnil(L, IDX_READ_CHR);
         hasWritePRG = !lua_isnil(L, IDX_WRITE_PRG);
         hasWriteCHR = !lua_isnil(L, IDX_WRITE_CHR);
-        hasStep = !lua_isnil(L, IDX_STEP);
+        hasStep     = !lua_isnil(L, IDX_STEP);
     }
 
 public:
@@ -61,8 +79,8 @@ public:
         lua_pushvalue(L, IDX_SELF);
         lua_pushinteger(L, addr);
         lua_call(L, 2, 1);
-        u32 r = static_cast<u32>(lua_tointeger(L, -1));
-        lua_pop(L, 1);
+        u32 r = lua_tointeger(L, -1);
+        lua_settop(L, IDX_STEP);
         return r;
     }
 
@@ -72,8 +90,8 @@ public:
         lua_pushvalue(L, IDX_SELF);
         lua_pushinteger(L, addr);
         lua_call(L, 2, 1);
-        u32 r = static_cast<u32>(lua_tointeger(L, -1));
-        lua_pop(L, 1);
+        u32 r = lua_tointeger(L, -1);
+        lua_settop(L, IDX_STEP);
         return r;
     }
 
@@ -84,9 +102,12 @@ public:
         lua_pushinteger(L, addr);
         lua_pushinteger(L, value);
         lua_call(L, 3, 1);
-        if (lua_isnil(L, -1)) { lua_pop(L, 1); return 0xFFFFFFFF; }
-        u32 r = static_cast<u32>(lua_tointeger(L, -1));
-        lua_pop(L, 1);
+        if (lua_isnil(L, -1)) {
+            lua_settop(L, IDX_STEP);
+            return 0xFFFFFFFF;
+        }
+        u32 r = lua_tointeger(L, -1);
+        lua_settop(L, IDX_STEP);
         return r;
     }
 
@@ -97,9 +118,12 @@ public:
         lua_pushinteger(L, addr);
         lua_pushinteger(L, value);
         lua_call(L, 3, 1);
-        if (lua_isnil(L, -1)) { lua_pop(L, 1); return 0xFFFFFFFF; }
-        u32 r = static_cast<u32>(lua_tointeger(L, -1));
-        lua_pop(L, 1);
+        if (lua_isnil(L, -1)) {
+            lua_settop(L, IDX_STEP);
+            return 0xFFFFFFFF;
+        }
+        u32 r = lua_tointeger(L, -1);
+        lua_settop(L, IDX_STEP);
         return r;
     }
 
@@ -118,76 +142,18 @@ private:
     bool hasWriteCHR{false};
     bool hasStep{false};
 
-private:
-    void regVars(lua_State* L) {
-        /* mirrorMode */
-        lua_pushinteger(L, mirrorMode);
-        lua_setglobal(L, "mirrorMode");
-
-        /* mapperNum */
-        lua_pushinteger(L, mapperNumber);
-        lua_setglobal(L, "mapperNum");
-
-        /* prgSize */
-        lua_pushinteger(L, PRG_ROM.size());
-        lua_setglobal(L, "prgSize");
-
-        /* chrSize */
-        lua_pushinteger(L, CHR_ROM.size());
-        lua_setglobal(L, "chrSize");
-
-
-        regLuaFunc("CHRresize", call_CHRresize);
-        regLuaFunc("TriggerIRQ", call_TriggerIRQ);
-        regLuaFunc("ClearIRQ", call_ClearIRQ);
-        regLuaFunc("SetMirror", call_SetMirror);
-    }
-
-    /* Кладёт функцию (или nil) на стек */
     void cacheFunc(const char* name) {
         lua_getfield(L, IDX_SELF, name);
     }
-
-private:
-    template<typename Func>
-    static int lua_wrapper(lua_State* L) {
-        lua_getglobal(L, "__cpp_instance");
-        Lua* instance = static_cast<Lua*>(lua_touserdata(L, -1));
-        lua_pop(L, 1);
-
-        if (!instance)
-            return luaL_error(L, "Не удалось получить экземпляр класса");
-
-        Func func = reinterpret_cast<Func>(lua_touserdata(L, lua_upvalueindex(1)));
-        return (*func)(L, instance);
-    }
-
-    template<typename Func>
-    void regLuaFunc(const char* name, Func func) {
-        lua_pushlightuserdata(L, reinterpret_cast<void*>(func));
-        lua_pushcclosure(L, lua_wrapper<Func>, 1);
-        lua_setglobal(L, name);
-    }
-
-
-    /* C++ api для Lua */
-    static int call_CHRresize(lua_State* L, Lua* instance) {
-        instance->CHR_ROM.resize(static_cast<u16>(luaL_checkinteger(L, 1)));
-        return 0;
-    }
-
-    static int call_TriggerIRQ(lua_State*, Lua* instance) {
-        instance->irqFlag = true;
-        return 0;
-    }
-
-    static int call_ClearIRQ(lua_State*, Lua* instance) {
-        instance->irqFlag = false;
-        return 0;
-    }
-
-    static int call_SetMirror(lua_State* L, Lua* instance) {
-        instance->mirrorMode = static_cast<u8>(luaL_checkinteger(L, 1));
-        return 0;
-    }
 };
+
+
+
+/* API */
+extern "C"
+{
+    void Cartridge_resize(void* instance, int vecType, size_t size);
+    void Cartridge_setMirror(void* instance, u8 mode);
+    void Cartridge_triggerIRQ(void* instance);
+    void Cartridge_clearIRQ(void* instance);
+}

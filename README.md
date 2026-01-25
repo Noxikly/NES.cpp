@@ -1,21 +1,20 @@
-# NES.cpp эмулятор
+# NES.cpp
 
-## Что это?
-NES.cpp - простой и легковесный эмулятор с поддержкой модульности мапперов. Поддерживает 0-4 мапперы и работает в 60 fps
+NES.cpp - простой и легковесный эмулятор с поддержкой модульности мапперов
 
-## Как установить?
+## Скриншоты
+<img src="img/kirby.png" alt="kirby" width="256" height="240">
+<img src="img/smb3.png" alt="smb3" width="256" height="240">
+<img src="img/dk.png" alt="dk" width="256" height="240">
+
+## Сборка
 Зависимости для сборки:
 * LuaJit
-* clang
+* gcc
 
 **Linux/MacOS:**
 ```bash
 git clone https://github.com/Noxikly/NES.cpp
 cd NES.cpp
 make -j
-```
-
-**Windows:**
-```
-скоро
 ```
