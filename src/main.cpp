@@ -66,8 +66,8 @@ int main(int argc, char **argv) {
 
     Mapper mapper;
     try {
-        mapper.loadNES(argv[1]);  // Загружаем ROM в маппер
-        mapper.load();            // Загружаем Lua скрипт маппера
+        mapper.loadNES(argv[1]);
+        mapper.load();
     }
     catch (const std::exception& e) {
         std::cerr << "Ошибка загрузки: " << e.what() << std::endl;
@@ -84,9 +84,7 @@ int main(int argc, char **argv) {
 
 
     Window win{};
-    if (!sdl_init(&win)) {
-        return 1;
-    }
+    if (!sdl_init(&win)) return 1;
 
 
     bool running = true;
@@ -94,7 +92,10 @@ int main(int argc, char **argv) {
     u8 joy = 0;
 
 
+    const float targetFrameMs = 1000.0f / 60.0f;
+
     while (running) {
+        const Uint64 start = SDL_GetTicks();
 
         while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_EVENT_QUIT)
@@ -139,13 +140,13 @@ int main(int argc, char **argv) {
             cpu.exec();
 
 
-            for (u8 i=0; i<3; ++i) {
+            const u32 ppuSteps = cpu.getCycles() * 3;
+            for (u32 i=0; i<ppuSteps; ++i) {
                 ppu.step();
 
                 if (ppu.frameReady) {
                     ppu.frameReady = false;
                     frameCompleted = true;
-                    break;
                 }
             }
 
@@ -155,10 +156,8 @@ int main(int argc, char **argv) {
                 ppu.clearNmi();
             }
 
-            if (mapper.irqFlag) {
+            if (mapper.irqFlag)
                 cpu.do_irq = true;
-                mapper.irqFlag = false;
-            }
         }
 
 
@@ -168,7 +167,9 @@ int main(int argc, char **argv) {
         SDL_RenderPresent(win.r);
 
 
-        SDL_Delay(1000/60);
+        const Uint64 frame = SDL_GetTicks() - start;
+        if (frame < targetFrameMs)
+            SDL_Delay(static_cast<Uint32>(targetFrameMs - frame));
     }
 
     sdl_free(&win);

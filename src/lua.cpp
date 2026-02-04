@@ -10,7 +10,7 @@ enum VecType : int
 
 extern "C"
 {
-    void Cartridge_resize(void* instance, int vecType, size_t size) {
+    void Cartridge_resize(void* instance, u8 vecType, size_t size) {
         auto* cart = static_cast<Cartridge*>(instance);
 
         switch (vecType) {

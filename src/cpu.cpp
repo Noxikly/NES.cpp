@@ -56,8 +56,8 @@ void Cpu::TYA() {
 
 /* Арифметические операции */
 void Cpu::ADC(u16 addr) {
-    u16 value = mem->read(addr);
-    u16 res = regs.A + value + (regs.P & C);
+    const u16 value = mem->read(addr);
+    const u16 res = regs.A + value + (regs.P & C);
 
     set_flag(C, res > 0xFF);
     set_flag(V, (((res ^ regs.A) & (res ^ value)) & N) != 0);
@@ -67,8 +67,8 @@ void Cpu::ADC(u16 addr) {
 }
 
 void Cpu::SBC(u16 addr) {
-    u16 value = mem->read(addr) ^ 0x00FF;
-    u16 res = regs.A + value + (regs.P & C);
+    const u16 value = mem->read(addr) ^ 0x00FF;
+    const u16 res = regs.A + value + (regs.P & C);
 
     set_flag(C, res > 0xFF);
     set_flag(V, (((res ^ regs.A) & (res ^ value)) & N) != 0);
@@ -131,7 +131,7 @@ void Cpu::LSR(u16 addr) {
 
 void Cpu::ROL(u16 addr) {
     u8 value = mem->read(addr);
-    u8 old_c = regs.P & C;
+    const u8 old_c = regs.P & C;
     set_flag(C, value & N);
     value <<= 1;
     value |= old_c;
@@ -141,7 +141,7 @@ void Cpu::ROL(u16 addr) {
 
 void Cpu::ROR(u16 addr) {
     u8 value = mem->read(addr);
-    u8 old_c = regs.P & C;
+    const u8 old_c = regs.P & C;
     set_flag(C, value & 0x01);
     value >>= 1;
     value |= (old_c << 7);
@@ -164,7 +164,7 @@ void Cpu::LSR_ACC() {
 }
 
 void Cpu::ROL_ACC() {
-    u8 old_c = regs.P & C;
+    const u8 old_c = regs.P & C;
     set_flag(C, regs.A & N);
     regs.A <<= 1;
     regs.A |= old_c;
@@ -172,7 +172,7 @@ void Cpu::ROL_ACC() {
 }
 
 void Cpu::ROR_ACC() {
-    u8 old_c = regs.P & C;
+    const u8 old_c = regs.P & C;
     set_flag(C, regs.A & 0x01);
     regs.A >>= 1;
     regs.A |= (old_c << 7);
@@ -197,7 +197,7 @@ void Cpu::EOR(u16 addr) {
 }
 
 void Cpu::BIT(u16 addr) {
-    u8 value = mem->read(addr);
+    const u8 value = mem->read(addr);
     set_flag(N, value & N);
     set_flag(V, value & V);
     set_flag(Z, (regs.A & value) == 0);
@@ -206,19 +206,19 @@ void Cpu::BIT(u16 addr) {
 
 /* Сравнение */
 void Cpu::CMP(u16 addr) {
-    u8 value = mem->read(addr);
+    const u8 value = mem->read(addr);
     set_flag(C, regs.A >= value);
     set_nz(regs.A - value);
 }
 
 void Cpu::CPX(u16 addr) {
-    u8 value = mem->read(addr);
+    const u8 value = mem->read(addr);
     set_flag(C, regs.X >= value);
     set_nz(regs.X - value);
 }
 
 void Cpu::CPY(u16 addr) {
-    u8 value = mem->read(addr);
+    const u8 value = mem->read(addr);
     set_flag(C, regs.Y >= value);
     set_nz(regs.Y - value);
 }
@@ -227,7 +227,7 @@ void Cpu::CPY(u16 addr) {
 /* Ветвления */
 void Cpu::BCC(u16 addr) {
     if (!(regs.P & C)) {
-        u16 old = regs.PC;
+        const u16 old = regs.PC;
         regs.PC = addr;
         cycles += 1 + ((old ^ addr) & 0xFF00 ? 1 : 0);
     }
@@ -235,7 +235,7 @@ void Cpu::BCC(u16 addr) {
 
 void Cpu::BCS(u16 addr) {
     if (regs.P & C) {
-        u16 old = regs.PC;
+        const u16 old = regs.PC;
         regs.PC = addr;
         cycles += 1 + ((old ^ addr) & 0xFF00 ? 1 : 0);
     }
@@ -243,7 +243,7 @@ void Cpu::BCS(u16 addr) {
 
 void Cpu::BEQ(u16 addr) {
     if (regs.P & Z) {
-        u16 old = regs.PC;
+        const u16 old = regs.PC;
         regs.PC = addr;
         cycles += 1 + ((old ^ addr) & 0xFF00 ? 1 : 0);
     }
@@ -251,7 +251,7 @@ void Cpu::BEQ(u16 addr) {
 
 void Cpu::BNE(u16 addr) {
     if (!(regs.P & Z)) {
-        u16 old = regs.PC;
+        const u16 old = regs.PC;
         regs.PC = addr;
         cycles += 1 + ((old ^ addr) & 0xFF00 ? 1 : 0);
     }
@@ -259,7 +259,7 @@ void Cpu::BNE(u16 addr) {
 
 void Cpu::BMI(u16 addr) {
     if (regs.P & N) {
-        u16 old = regs.PC;
+        const u16 old = regs.PC;
         regs.PC = addr;
         cycles += 1 + ((old ^ addr) & 0xFF00 ? 1 : 0);
     }
@@ -267,7 +267,7 @@ void Cpu::BMI(u16 addr) {
 
 void Cpu::BPL(u16 addr) {
     if (!(regs.P & N)) {
-        u16 old = regs.PC;
+        const u16 old = regs.PC;
         regs.PC = addr;
         cycles += 1 + ((old ^ addr) & 0xFF00 ? 1 : 0);
     }
@@ -275,7 +275,7 @@ void Cpu::BPL(u16 addr) {
 
 void Cpu::BVC(u16 addr) {
     if (!(regs.P & V)) {
-        u16 old = regs.PC;
+        const u16 old = regs.PC;
         regs.PC = addr;
         cycles += 1 + ((old ^ addr) & 0xFF00 ? 1 : 0);
     }
@@ -283,7 +283,7 @@ void Cpu::BVC(u16 addr) {
 
 void Cpu::BVS(u16 addr) {
     if (regs.P & V) {
-        u16 old = regs.PC;
+        const u16 old = regs.PC;
         regs.PC = addr;
         cycles += 1 + ((old ^ addr) & 0xFF00 ? 1 : 0);
     }
@@ -303,8 +303,8 @@ void Cpu::JSR(u16 addr) {
 }
 
 void Cpu::RTS() {
-    u8 low = pop();
-    u8 high = pop();
+    const u8 low = pop();
+    const u8 high = pop();
     regs.PC = (static_cast<u16>(high) << 8) | low;
     regs.PC++;
 }
@@ -315,15 +315,15 @@ void Cpu::BRK() {
     push(regs.PC & 0xFF);
     push(regs.P | BREAK);
     set_flag(I, true);
-    regs.PC = mem->ram[0xFFFE] | (mem->ram[0xFFFF] << 8);
+    regs.PC = read16(0xFFFE);
 }
 
 void Cpu::RTI() {
     regs.P = pop();
-    regs.P &= ~BREAK;
-    regs.P |= UNUSED;
-    u8 low = pop();
-    u8 high = pop();
+    const u8 low = pop();
+    const u8 high = pop();
+    set_flag(BREAK, false);
+    set_flag(UNUSED, true);
     regs.PC = (static_cast<u16>(high) << 8) | low;
 }
 
@@ -344,8 +344,8 @@ void Cpu::PHP() {
 
 void Cpu::PLP() {
     regs.P = pop();
-    regs.P &= ~BREAK;
-    regs.P |= UNUSED;
+    set_flag(BREAK, false);
+    set_flag(UNUSED, true);
 }
 
 
@@ -430,7 +430,7 @@ void Cpu::ISC(u16 addr) {
 }
 
 void Cpu::LAS(u16 addr) {
-    u8 value = regs.SP & mem->read(addr);
+    const u8 value = regs.SP & mem->read(addr);
     regs.X = regs.A = regs.SP = value;
     set_nz(value);
 }
@@ -441,7 +441,7 @@ void Cpu::LAX(u16 addr) {
 }
 
 void Cpu::LXA(u16 addr) {
-    u8 value = (regs.A | CONSTANT) & mem->read(addr);
+    const u8 value = (regs.A | CONSTANT) & mem->read(addr);
     regs.A = regs.X = value;
     set_nz(value);
 }
@@ -461,7 +461,7 @@ void Cpu::SAX(u16 addr) {
 }
 
 void Cpu::SBX(u16 addr) {
-    u8 value = mem->read(addr);
+    const u8 value = mem->read(addr);
     regs.X = (regs.A & regs.X) - value;
 
     set_flag(C, (regs.A & regs.X) >= value);
@@ -471,21 +471,21 @@ void Cpu::SBX(u16 addr) {
 void Cpu::SHA(u16 addr) {
     u8 h = high(addr) + 1;
     if ((addr & 0xFF) + regs.Y >= 0x100) h--;
-    u8 val = regs.A & regs.X & h;
+    const u8 val = regs.A & regs.X & h;
     mem->write(addr, val);
 }
 
 void Cpu::SHX(u16 addr) {
     u8 h = (addr >> 8) + 1;
     if ((addr & 0xFF) + regs.Y >= 0x100) h--;
-    u8 val = regs.X & h;
+    const u8 val = regs.X & h;
     mem->write(addr, val);
 }
 
 void Cpu::SHY(u16 addr) {
     u8 h = (addr >> 8) + 1;
     if ((addr & 0xFF) + regs.X >= 0x100) h--;
-    u8 val = regs.Y & h;
+    const u8 val = regs.Y & h;
     mem->write(addr, val);
 }
 
@@ -503,7 +503,7 @@ void Cpu::TAS(u16 addr) {
     regs.SP = regs.A & regs.X;
     u8 h = (addr >> 8) + 1;
     if ((addr & 0xFF) + regs.Y >= 0x100) h--;
-    u8 val = regs.SP & h;
+    const u8 val = regs.SP & h;
     mem->write(addr, val);
 }
 
@@ -543,15 +543,13 @@ void Cpu::nmi() {
 }
 
 void Cpu::irq() {
-    if (!(regs.P & I)) {
-        push((regs.PC >> 8) & 0xFF);
-        push(regs.PC & 0xFF);
-        push(regs.P & ~BREAK);
-        set_flag(I, true);
-        regs.PC = read16(0xFFFE);
-        cycles = 7;
-        total_cycles += cycles;
-    }
+    push((regs.PC >> 8) & 0xFF);
+    push(regs.PC & 0xFF);
+    push(regs.P & ~BREAK);
+    set_flag(I, true);
+    regs.PC = read16(0xFFFE);
+    cycles = 7;
+    total_cycles += cycles;
 }
 
 
@@ -981,14 +979,16 @@ void Cpu::step() {
 
 void Cpu::exec() {
     if(do_nmi) {
-        nmi();
         do_nmi = false;
+        nmi();
         return;
     }
     if(do_irq) {
-        irq();
         do_irq = false;
-        return;
+        if (!(regs.P & I)) {
+            irq();
+            return;
+        }
     }
 
     cycles = 0;

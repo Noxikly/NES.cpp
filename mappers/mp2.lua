@@ -6,7 +6,9 @@ local mp2 = {}
 function mp2:init()
     self.prgBank = 0
     self.cntBank = prgSize / 0x4000
-    if chrSize == 0 then
+    self.chrRAM  = chrSize == 0
+
+    if self.chrRAM then
         lib.resizeCHR(0x2000)
     end
 end
@@ -24,17 +26,17 @@ function mp2:readPRGAddr(addr)
 end
 
 function mp2:writePRGAddr(addr, value)
-    self.prgBank = lib.band(value, self.cntBank - 1)
+    self.prgBank = lib.bit_and(value, self.cntBank - 1)
     return nil
 end
 
 function mp2:readCHRAddr(addr)
-    return lib.band(addr, 0x1FFF)
+    return lib.bit_and(addr, 0x1FFF)
 end
 
 function mp2:writeCHRAddr(addr, value)
-    if chrSize == 0 then
-        return lib.band(addr, 0x1FFF)
+    if self.chrRAM then
+        return lib.bit_and(addr, 0x1FFF)
     end
     return nil
 end

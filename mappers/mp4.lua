@@ -30,10 +30,10 @@ end
 
 function mp4:getPRGBank(addr)
     addr = addr - 0x8000
-    local bankIdx = lib.rshift(addr, 13)
+    local bankIdx = lib.bit_rshift(addr, 13)
     
-    local r6 = lib.band(self.regs[7], self.cntPRG-1)
-    local r7 = lib.band(self.regs[8], self.cntPRG-1)
+    local r6 = lib.bit_and(self.regs[7], self.cntPRG-1)
+    local r7 = lib.bit_and(self.regs[8], self.cntPRG-1)
     local lastSecond = self.cntPRG-2
     local last = self.cntPRG-1
     
@@ -53,23 +53,23 @@ function mp4:getPRGBank(addr)
 end
 
 function mp4:getCHRBank(addr)
-    local bankIdx = lib.rshift(lib.band(addr, 0x1FFF), 10)
+    local bankIdx = lib.bit_rshift(lib.bit_and(addr, 0x1FFF), 10)
     
 
-    local r0 = lib.band(self.regs[1], 0xFE)
-    local r1 = lib.band(self.regs[2], 0xFE)
+    local r0 = lib.bit_and(self.regs[1], 0xFE)
+    local r1 = lib.bit_and(self.regs[2], 0xFE)
     local r2 = self.regs[3]
     local r3 = self.regs[4]
     local r4 = self.regs[5]
     local r5 = self.regs[6]
     
     -- Применяем маску
-    r0 = lib.band(r0, self.cntCHR-1)
-    r1 = lib.band(r1, self.cntCHR-1)
-    r2 = lib.band(r2, self.cntCHR-1)
-    r3 = lib.band(r3, self.cntCHR-1)
-    r4 = lib.band(r4, self.cntCHR-1)
-    r5 = lib.band(r5, self.cntCHR-1)
+    r0 = lib.bit_and(r0, self.cntCHR-1)
+    r1 = lib.bit_and(r1, self.cntCHR-1)
+    r2 = lib.bit_and(r2, self.cntCHR-1)
+    r3 = lib.bit_and(r3, self.cntCHR-1)
+    r4 = lib.bit_and(r4, self.cntCHR-1)
+    r5 = lib.bit_and(r5, self.cntCHR-1)
     
     if not self.modeCHR then
         if bankIdx == 0 then return r0
@@ -96,20 +96,20 @@ end
 
 function mp4:readPRGAddr(addr)
     local bank = self:getPRGBank(addr)
-    local offset = lib.band(addr, 0x1FFF)
+    local offset = lib.bit_and(addr, 0x1FFF)
     return bank * 0x2000 + offset
 end
 
 function mp4:writePRGAddr(addr, value)
     if addr < 0x8000 then return nil end
     
-    local evenAddr = lib.band(addr, 0x01) == 0
+    local evenAddr = lib.bit_and(addr, 0x01) == 0
     
     if addr >= 0x8000 and addr <= 0x9FFF then
         if evenAddr then
-            self.bankSelect = lib.band(value, 0x07)
-            self.modePRG = lib.band(value, 0x40) ~= 0
-            self.modeCHR = lib.band(value, 0x80) ~= 0
+            self.bankSelect = lib.bit_and(value, 0x07)
+            self.modePRG = lib.bit_and(value, 0x40) ~= 0
+            self.modeCHR = lib.bit_and(value, 0x80) ~= 0
         else
             self.regs[self.bankSelect + 1] = value
         end
@@ -117,7 +117,7 @@ function mp4:writePRGAddr(addr, value)
     elseif addr >= 0xA000 and addr <= 0xBFFF then
         if evenAddr then
             -- 0 = vertical, 1 = horizontal
-            local mode = lib.band(value, 0x01) == 0 and lib.MIRROR_VERTICAL or lib.MIRROR_HORIZONTAL
+            local mode = lib.bit_and(value, 0x01) == 0 and lib.MIRROR_VERTICAL or lib.MIRROR_HORIZONTAL
             lib.setMirror(mode)
         end
         
@@ -149,7 +149,7 @@ end
 
 function mp4:readCHRAddr(addr)
     local bank = self:getCHRBank(addr)
-    local offset = lib.band(addr, 0x03FF)
+    local offset = lib.bit_and(addr, 0x03FF)
     return bank*0x0400 + offset
 end
 

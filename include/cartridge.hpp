@@ -19,10 +19,10 @@ public:
             throw std::runtime_error("[LOAD]: Неверный iNES заголовок");
 
         /* Парсинг заголовка */
-        u8 prgBanks = header[4];  /* Количество 16KB банков PRG ROM */
-        u8 chrBanks = header[5];  /* Количество 8KB банков CHR ROM  */
-        u8 flags6 = header[6];    /* Флаги 6 */
-        u8 flags7 = header[7];    /* Флаги 7 */
+        const u8 prgBanks = header[4];  /* Количество 16KB банков PRG ROM */
+        const u8 chrBanks = header[5];  /* Количество 8KB банков CHR ROM  */
+        const u8 flags6 = header[6];    /* Флаги 6 */
+        const u8 flags7 = header[7];    /* Флаги 7 */
 
 
         mirrorMode = (flags6 & 0x01);  /* 0 = horizontal, 1 = vertical */

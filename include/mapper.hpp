@@ -14,14 +14,14 @@ public:
 
 public:
     inline u8 readPRG(u16 addr) {
-        u32 mappedAddr = readPRGAddr(addr);
+        const u32 mappedAddr = (!hasReadPRG) ? addr : callFunc(IDX_READ_PRG, addr);
         if (mappedAddr != 0xFFFFFFFF)
             return PRG_ROM[mappedAddr];
         return 0;
     }
 
     inline u8 readCHR(u16 addr) {
-        u32 mappedAddr = readCHRAddr(addr);
+        const u32 mappedAddr = (!hasReadCHR) ? addr : callFunc(IDX_READ_CHR, addr);
         if (mappedAddr != 0xFFFFFFFF)
             return CHR_ROM[mappedAddr];
         return 0;
@@ -31,14 +31,14 @@ public:
 
 
     inline void writePRG(u16 addr, u8 value) {
-        u32 mappedAddr = writePRGAddr(addr, value);
+        const u32 mappedAddr = (!hasWritePRG) ? addr : callFunc(IDX_WRITE_PRG, addr, value);
         if (mappedAddr != 0xFFFFFFFF) {
             PRG_ROM[mappedAddr] = value;
         }
     }
 
     inline void writeCHR(u16 addr, u8 value) {
-        u32 mappedAddr = writeCHRAddr(addr, value);
+        const u32 mappedAddr = (!hasWriteCHR) ? addr : callFunc(IDX_WRITE_CHR, addr, value);
         if (mappedAddr != 0xFFFFFFFF) {
             CHR_ROM[mappedAddr] = value;
         }

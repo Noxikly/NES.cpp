@@ -85,14 +85,9 @@ return mp0 -- Обязательно вернуть
 | triggerIRQ() | Поднимает флаг IRQ (irqFlag = true) | `lib.triggerIRQ()` |
 | clearIRQ() | Сбрасывает флаг IRQ (irqFlag = false) | `lib.clearIRQ()` |
 | getIRQ() | Возвращает состояние флага IRQ | `if lib.getIRQ() then ... end` |
-| readPRGDirect(addr) | Читает 1 байт из PRG-ROM по адресу | `local b = lib.readPRGDirect(0xC000)` |
-| writePRGDirect(addr, value) | Пишет 1 байт в PRG-ROM по адресу | `lib.writePRGDirect(0xC000, 0xA9)` |
-| readCHRDirect(addr) | Читает 1 байт из CHR-ROM по адресу | `local tile = lib.readCHRDirect(0x0000)` |
-| writeCHRDirect(addr, value) | Пишет 1 байт в CHR-ROM по адресу | `lib.writeCHRDirect(0x0000, 0xFF)` |
-| readRAMDirect(addr) | Читает 1 байт из PRG-RAM (addr & 0x1FFF) | `local save = lib.readRAMDirect(0x6000)` |
-| writeRAMDirect(addr, value) | Пишет 1 байт в PRG-RAM (addr & 0x1FFF) | `lib.writeRAMDirect(0x6000, 0x55)` |
-| getBit(value, bit) | Возвращает значение бита (0/1) | `local bit0 = lib.getBit(0x83, 0)` → 1 |
-| setBit(value, bit) | Устанавливает бит в 1 | `lib.setBit(flags, 3)` |
-| clearBit(value, bit) | Сбрасывает бит в 0 | `lib.clearBit(flags, 3)` |
-| toggleBit(value, bit) | Инвертирует бит | `lib.toggleBit(flags, 3)` |
-| testBit(value, bit) | Проверяет, установлен ли бит | `if lib.testBit(flags, 3) then ... end` |
+| readPRG(addr) | Читает 1 байт из PRG-ROM по адресу | `local b = lib.readPRG(0xC000)` |
+| writePRG(addr, value) | Пишет 1 байт в PRG-ROM по адресу | `lib.writePRG(0xC000, 0xA9)` |
+| readCHR(addr) | Читает 1 байт из CHR-ROM по адресу | `local tile = lib.readCHR(0x0000)` |
+| writeCHR(addr, value) | Пишет 1 байт в CHR-ROM по адресу | `lib.writeCHR(0x0000, 0xFF)` |
+| readRAM(addr) | Читает 1 байт из PRG-RAM (addr & 0x1FFF) | `local save = lib.readRAM(0x6000)` |
+| writeRAM(addr, value) | Пишет 1 байт в PRG-RAM (addr & 0x1FFF) | `lib.writeRAM(0x6000, 0x55)` |

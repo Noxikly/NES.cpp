@@ -10,15 +10,19 @@ extern "C" {
 
 
 class Lua : public Cartridge {
-    static constexpr int IDX_SELF = 1;
-    static constexpr int IDX_READ_PRG = 2;
-    static constexpr int IDX_READ_CHR = 3;
-    static constexpr int IDX_WRITE_PRG = 4;
-    static constexpr int IDX_WRITE_CHR = 5;
-    static constexpr int IDX_STEP = 6;
+protected:
+    enum : u8 {
+        IDX_SELF      = 1,
+        IDX_READ_PRG  = 2,
+        IDX_READ_CHR  = 3,
+        IDX_WRITE_PRG = 4,
+        IDX_WRITE_CHR = 5,
+        IDX_STEP      = 6,
+    };
 
 public:
     explicit Lua() : L(luaL_newstate()) {
+        if (!L) throw std::runtime_error("[LUA]: Не удалось создать lua_State");
         luaL_openlibs(L);
         luaJIT_setmode(L, 0, LUAJIT_MODE_ENGINE | LUAJIT_MODE_ON);
     }
@@ -26,10 +30,12 @@ public:
 
 
     void open(const std::string& path) {
+        lua_settop(L, 0);
         lua_pushlightuserdata(L, this);
         lua_setglobal(L, "__instance");
 
-        luaL_dostring(L, "package.path = 'mappers/?.lua;' .. package.path");
+        if (luaL_dostring(L, "package.path = 'mappers/?.lua;' .. package.path") != LUA_OK)
+            throw std::runtime_error("[LUA]: " + luaError());
 
         lua_pushinteger(L, PRG_ROM.size());
         lua_setglobal(L, "prgSize");
@@ -43,7 +49,7 @@ public:
 
         /* Загружаем файл */
         if(luaL_dofile(L, path.c_str()) != LUA_OK)
-            throw std::runtime_error("[LUA]: "+std::string(lua_tostring(L, -1)));
+            throw std::runtime_error("[LUA]: " + luaError());
 
         if (!lua_istable(L, -1))
             throw std::runtime_error("[LUA]: Скрипт должен возвращать таблицу");
@@ -53,7 +59,8 @@ public:
         lua_getfield(L, -1, "init");
         if (lua_isfunction(L, -1)) {
             lua_pushvalue(L, -2);
-            lua_call(L, 1, 0);
+            if (lua_pcall(L, 1, 0, 0) != LUA_OK)
+                throw std::runtime_error("[LUA]: " + luaError());
         } else {
             lua_pop(L, 1);
         }
@@ -65,6 +72,8 @@ public:
         cacheFunc("writeCHRAddr");
         cacheFunc("step");
 
+        lua_settop(L, IDX_STEP);
+
         hasReadPRG  = !lua_isnil(L, IDX_READ_PRG);
         hasReadCHR  = !lua_isnil(L, IDX_READ_CHR);
         hasWritePRG = !lua_isnil(L, IDX_WRITE_PRG);
@@ -73,68 +82,15 @@ public:
     }
 
 public:
-    inline u32 readPRGAddr(u16 addr) {
-        if (!hasReadPRG) return 0xFFFFFFFF;
-        lua_pushvalue(L, IDX_READ_PRG);
-        lua_pushvalue(L, IDX_SELF);
-        lua_pushinteger(L, addr);
-        lua_call(L, 2, 1);
-        u32 r = lua_tointeger(L, -1);
-        lua_settop(L, IDX_STEP);
-        return r;
-    }
-
-    inline u32 readCHRAddr(u16 addr) {
-        if (!hasReadCHR) return 0xFFFFFFFF;
-        lua_pushvalue(L, IDX_READ_CHR);
-        lua_pushvalue(L, IDX_SELF);
-        lua_pushinteger(L, addr);
-        lua_call(L, 2, 1);
-        u32 r = lua_tointeger(L, -1);
-        lua_settop(L, IDX_STEP);
-        return r;
-    }
-
-    inline u32 writePRGAddr(u16 addr, u8 value) {
-        if (!hasWritePRG) return 0xFFFFFFFF;
-        lua_pushvalue(L, IDX_WRITE_PRG);
-        lua_pushvalue(L, IDX_SELF);
-        lua_pushinteger(L, addr);
-        lua_pushinteger(L, value);
-        lua_call(L, 3, 1);
-        if (lua_isnil(L, -1)) {
-            lua_settop(L, IDX_STEP);
-            return 0xFFFFFFFF;
-        }
-        u32 r = lua_tointeger(L, -1);
-        lua_settop(L, IDX_STEP);
-        return r;
-    }
-
-    inline u32 writeCHRAddr(u16 addr, u8 value) {
-        if (!hasWriteCHR) return 0xFFFFFFFF;
-        lua_pushvalue(L, IDX_WRITE_CHR);
-        lua_pushvalue(L, IDX_SELF);
-        lua_pushinteger(L, addr);
-        lua_pushinteger(L, value);
-        lua_call(L, 3, 1);
-        if (lua_isnil(L, -1)) {
-            lua_settop(L, IDX_STEP);
-            return 0xFFFFFFFF;
-        }
-        u32 r = lua_tointeger(L, -1);
-        lua_settop(L, IDX_STEP);
-        return r;
-    }
-
     inline void step() {
         if (!hasStep) return;
         lua_pushvalue(L, IDX_STEP);
         lua_pushvalue(L, IDX_SELF);
-        lua_call(L, 1, 0);
+        if (lua_pcall(L, 1, 0, 0) != LUA_OK)
+            throwLuaError();
     }
 
-private:
+protected:
     lua_State *L;
     bool hasReadPRG{false};
     bool hasReadCHR{false};
@@ -142,8 +98,55 @@ private:
     bool hasWriteCHR{false};
     bool hasStep{false};
 
+    inline u32 callFunc(int idx, u16 addr) {
+        lua_pushvalue(L, idx);
+        lua_pushvalue(L, IDX_SELF);
+        lua_pushinteger(L, addr);
+        if (lua_pcall(L, 2, 1, 0) != LUA_OK)
+            throwLuaError();
+        if (lua_isnil(L, -1)) {
+            lua_settop(L, IDX_STEP);
+            return 0xFFFFFFFF;
+        }
+        const u32 r = static_cast<u32>(lua_tointeger(L, -1));
+        lua_settop(L, IDX_STEP);
+        return r;
+    }
+
+    inline u32 callFunc(int idx, u16 addr, u8 value) {
+        lua_pushvalue(L, idx);
+        lua_pushvalue(L, IDX_SELF);
+        lua_pushinteger(L, addr);
+        lua_pushinteger(L, value);
+        if (lua_pcall(L, 3, 1, 0) != LUA_OK)
+            throwLuaError();
+        if (lua_isnil(L, -1)) {
+            lua_settop(L, IDX_STEP);
+            return 0xFFFFFFFF;
+        }
+        const u32 r = static_cast<u32>(lua_tointeger(L, -1));
+        lua_settop(L, IDX_STEP);
+        return r;
+    }
+
+    inline std::string luaError() {
+        const char* err = lua_tostring(L, -1);
+        return err ? std::string(err) : std::string("Неизвестная ошибка");
+    }
+
+    void throwLuaError() {
+        const std::string err = luaError();
+        lua_settop(L, IDX_STEP);
+        throw std::runtime_error("[LUA]: " + err);
+    }
+
+private:
     void cacheFunc(const char* name) {
         lua_getfield(L, IDX_SELF, name);
+        if (!lua_isfunction(L, -1)) {
+            lua_pop(L, 1);
+            lua_pushnil(L);
+        }
     }
 };
 
@@ -152,7 +155,7 @@ private:
 /* API */
 extern "C"
 {
-    void Cartridge_resize(void* instance, int vecType, size_t size);
+    void Cartridge_resize(void* instance, u8 vecType, size_t size);
     void Cartridge_setMirror(void* instance, u8 mode);
     void Cartridge_triggerIRQ(void* instance);
     void Cartridge_clearIRQ(void* instance);

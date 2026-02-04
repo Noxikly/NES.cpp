@@ -3,15 +3,10 @@ local bit = require("bit")
 
 
 ffi.cdef [[
-    typedef uint8_t u8;
-    typedef uint16_t u16;
-    typedef uint32_t u32;
-
-
     typedef struct {
-        u8* _M_start;
-        u8* _M_finish;
-        u8* _M_end_of_storage;
+        uint8_t* _M_start;
+        uint8_t* _M_finish;
+        uint8_t* _M_end_of_storage;
     } vector_u8;
 
 
@@ -19,8 +14,8 @@ ffi.cdef [[
         vector_u8 PRG_ROM;
         vector_u8 PRG_RAM;
         vector_u8 CHR_ROM;
-        u8 mirrorMode;
-        u16 mapperNumber;
+        uint8_t mirrorMode;
+        uint16_t mapperNumber;
         bool irqFlag;
     } Cartridge;
 
@@ -32,8 +27,8 @@ ffi.cdef [[
     };
 
 
-    void Cartridge_resize(void* instance, int vecType, size_t size);
-    void Cartridge_setMirror(void* instance, u8 mode);
+    void Cartridge_resize(void* instance, uint8_t vecType, size_t size);
+    void Cartridge_setMirror(void* instance, uint8_t mode);
     void Cartridge_triggerIRQ(void* instance);
     void Cartridge_clearIRQ(void* instance);
 ]]
@@ -50,19 +45,19 @@ M.VEC_CHR_ROM = ffi.C.VEC_CHR_ROM -- константа CHR_ROM
 
 M.MIRROR_HORIZONTAL = 0
 M.MIRROR_VERTICAL = 1
-M.MIRROR_SINGLE_SCREEN_A = 2
-M.MIRROR_SINGLE_SCREEN_B = 3
-M.MIRROR_FOUR_SCREEN = 4
+M.MIRROR_FOUR_SCREEN = 2
+M.MIRROR_SINGLE_SCREEN_A = 3
+M.MIRROR_SINGLE_SCREEN_B = 4
 
 -- Битовые операции
 
-M.band = bit.band
-M.bor = bit.bor
-M.bxor = bit.bxor
-M.bnot = bit.bnot
-M.lshift = bit.lshift
-M.rshift = bit.rshift
-M.arshift = bit.arshift
+M.bit_and = bit.band
+M.bit_or = bit.bor
+M.bit_xor = bit.bxor
+M.bit_not = bit.bnot
+M.bit_lshift = bit.lshift
+M.bit_rshift = bit.rshift
+M.bit_arshift = bit.arshift
 
 -- Получаем указатель на Cartridge
 local cart = ffi.cast("Cartridge*", __instance)
@@ -121,7 +116,7 @@ end
 -- Прямое чтение/запись PRG_ROM
 
 -- Чтение из PRG
-function M.readPRGDirect(addr)
+function M.readPRG(addr)
     if addr < prgSize then
         return cart.PRG_ROM._M_start[addr]
     end
@@ -129,7 +124,7 @@ function M.readPRGDirect(addr)
 end
 
 -- Запись в PRG
-function M.writePRGDirect(addr, value)
+function M.writePRG(addr, value)
     if addr < prgSize then
         cart.PRG_ROM._M_start[addr] = value
     end
@@ -138,7 +133,7 @@ end
 -- Прямое чтение/запись CHR_ROM
 
 -- Чтение из CHR
-function M.readCHRDirect(addr)
+function M.readCHR(addr)
     if addr < chrSize then
         return cart.CHR_ROM._M_start[addr]
     end
@@ -146,7 +141,7 @@ function M.readCHRDirect(addr)
 end
 
 -- Запись в CHR
-function M.writeCHRDirect(addr, value)
+function M.writeCHR(addr, value)
     if addr < chrSize then
         cart.CHR_ROM._M_start[addr] = value
     end
@@ -155,8 +150,8 @@ end
 -- Прямое чтение/запись PRG_RAM
 
 -- чтение из PRG_RAM
-function M.readRAMDirect(addr)
-    addr = M.band(addr, 0x1FFF)
+function M.readRAM(addr)
+    addr = M.bit_and(addr, 0x1FFF)
     if addr < prgRamSize then
         return cart.PRG_RAM._M_start[addr]
     end
@@ -164,33 +159,11 @@ function M.readRAMDirect(addr)
 end
 
 -- запись в PRG_RAM
-function M.writeRAMDirect(addr, value)
-    addr = M.band(addr, 0x1FFF)
+function M.writeRAM(addr, value)
+    addr = M.bit_and(addr, 0x1FFF)
     if addr < prgRamSize then
         cart.PRG_RAM._M_start[addr] = value
     end
-end
-
--- Хелперы для работы с битами
-
-function M.getBit(value, bit)
-    return M.band(M.rshift(value, bit), 1)
-end
-
-function M.setBit(value, bit)
-    return M.bor(value, M.lshift(1, bit))
-end
-
-function M.clearBit(value, bit)
-    return M.band(value, M.bnot(M.lshift(1, bit)))
-end
-
-function M.toggleBit(value, bit)
-    return M.bxor(value, M.lshift(1, bit))
-end
-
-function M.testBit(value, bit)
-    return M.band(value, M.lshift(1, bit)) ~= 0
 end
 
 return M

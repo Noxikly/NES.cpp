@@ -1,28 +1,35 @@
-CXX      := g++
-LDFLAGS  := `pkg-config --libs sdl3 luajit` -rdynamic
-INCLUDES := `pkg-config --cflags luajit`
-CXXFLAGS := -std=c++20 -O2 -Wall -Wextra -Wpedantic $(INCLUDES)
+CXX ?= g++
+INC  := -Iinclude
+OPT  := -O2 -flto=auto
+WARN := -Wall -Wextra -Wpedantic
+CXXFLAGS := -std=c++17 $(INC) $(OPT) $(WARN)
 
-TARGET:=nes
-SOURCES  := $(wildcard src/*.cpp)
-OBJECTS  := $(patsubst src/%.cpp, build/%.o, $(SOURCES))
-
-
-ifeq ($(OS), Windows_NT)
-	TARGET=nes.exe
-	LDFLAGS+= -static-libgcc -static-libstdc++ -Wl,-Bstatic \
-		      -lstdc++ -lpthread -Wl,-Bdynamic
-endif
+LIBS     := `pkg-config --libs sdl3 luajit`
+WIN_LIBS := -static -static-libgcc -static-libstdc++
 
 
-$(TARGET): $(OBJECTS)
-	$(CXX) $^ -o $@ $(LDFLAGS)
+SOURCES := $(wildcard src/*.cpp)
+OBJECTS := $(patsubst src/%.cpp, build/%.o, $(SOURCES))
+
+
+# Тесты
+#include tests.mk
+
+
+all: nes
+
+# Сборка
+nes: $(OBJECTS)
+	$(CXX) $^ -rdynamic -o $@ $(LIBS)
+
+win: $(OBJECTS)
+	$(CXX) $^ -rdynamic -o $@ $(LIBS) $(WIN_LIBS)
 
 build/%.o: src/%.cpp | build
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 build:
-	mkdir -p build build/mappers
+	mkdir -p build
 
 clean:
-	rm -rf build $(TARGET)
+	rm -rf build nes test_all

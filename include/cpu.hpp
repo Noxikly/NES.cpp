@@ -14,7 +14,7 @@ public:
 
     auto isPageCrossed() const -> bool { return page_crossed; }
     auto getTotalCycles() const -> u64 { return total_cycles; }
-    auto getCycles() const -> u16      { return cycles; }
+    auto getCycles() const -> u32      { return cycles; }
 
 public:
     enum : u8 {
@@ -42,7 +42,7 @@ public:
 private:
     Memory *mem{nullptr};
 
-    u16  cycles{0};            /* Счетчик циклов для текущей инструкции */
+    u32  cycles{0};            /* Счетчик циклов для текущей инструкции */
     u64 total_cycles{0};      /* Счетчик циклов для всех инструкций    */
     bool page_crossed{false}; /* Флаг пересечения границы страницы     */
 
@@ -52,13 +52,13 @@ private:
     void irq();
 
 public:
-    auto read16(u16 addr) -> u16 { u8 high = mem->read(addr+1);
-                                   u8 low  = mem->read(addr);
-                                   return (high << 8) | low; }
+    auto read16(u16 addr) const -> u16 { const u8 high = mem->read(addr+1);
+                                         const u8 low  = mem->read(addr);
+                                         return (high << 8) | low; }
 
-    auto read16_zp(u8 addr) -> u16 { u8 low  = mem->read(addr);
-                                     u8 high = mem->read((addr + 1) & 0xFF);
-                                     return ((high) << 8) | low; }
+    auto read16_zp(u8 addr) const -> u16 { const u8 low  = mem->read(addr);
+                                           const u8 high = mem->read((addr + 1) & 0xFF);
+                                           return ((high) << 8) | low; }
 
     void push(u8 value) { mem->write(STACK + regs.SP--, value); }
     auto pop() -> u8 { return mem->read(STACK + (++regs.SP)); }
@@ -91,8 +91,8 @@ private:
                                   page_crossed = (addr & 0xFF00) != (indexed_addr & 0xFF00);
                                   return indexed_addr; }
     inline auto AM_IND() -> u16 { const u16 addr = AM_ABS();
-                                  u8 low = mem->read(addr);
-                                  u8 high = mem->read((addr & 0xFF00) | ((addr + 1) & 0x00FF));
+                                  const u8 low = mem->read(addr);
+                                  const u8 high = mem->read((addr & 0xFF00) | ((addr + 1) & 0x00FF));
                                   return (static_cast<u16>(high) << 8 | low); }
     inline auto AM_INX() -> u16 { return read16_zp(AM_ZPX()); }
     inline auto AM_INY() -> u16 { const u16 addr = read16_zp(AM_ZPG());

@@ -3,6 +3,19 @@ local lib = require("lib")
 
 local mp1 = {}
 
+local function updateMirror(ctrl)
+    local mode = lib.bit_and(ctrl, 0x03)
+    if mode == 0 then
+        lib.setMirror(lib.MIRROR_SINGLE_SCREEN_A)
+    elseif mode == 1 then
+        lib.setMirror(lib.MIRROR_SINGLE_SCREEN_B)
+    elseif mode == 2 then
+        lib.setMirror(lib.MIRROR_VERTICAL)
+    else
+        lib.setMirror(lib.MIRROR_HORIZONTAL)
+    end
+end
+
 function mp1:init()
     self.shiftReg = 0x10
     self.ctrl = 0x0C
@@ -19,18 +32,20 @@ function mp1:init()
         lib.resizeCHR(0x2000)
         self.chrBankCount = 2
     end
+
+    updateMirror(self.ctrl)
 end
 
 
 function mp1:readPRGAddr(addr)
     addr = addr - 0x8000
 
-    local prgMode = lib.band(lib.rshift(self.ctrl, 2), 0x03)
+    local prgMode = lib.bit_and(lib.bit_rshift(self.ctrl, 2), 0x03)
     local bankOffset
 
 
     if prgMode <= 1 then
-        bankOffset = lib.band(self.prgBank, 0xFE) * 0x4000
+        bankOffset = lib.bit_and(self.prgBank, 0xFE) * 0x4000
         return (bankOffset + addr) % prgSize
     elseif prgMode == 2 then
         if addr < 0x4000 then
@@ -52,30 +67,32 @@ end
 
 
 function mp1:writePRGAddr(addr, value)
-    if lib.band(value, 0x80) ~= 0 then
+    if lib.bit_and(value, 0x80) ~= 0 then
         self.shiftReg = 0x10
-        self.ctrl = lib.bor(self.ctrl, 0x0C)
+        self.ctrl = lib.bit_or(self.ctrl, 0x0C)
+        updateMirror(self.ctrl)
         return nil
     end
 
-    local fill = lib.band(self.shiftReg, 1) == 1
-    self.shiftReg = lib.rshift(self.shiftReg, 1)
-    self.shiftReg = lib.bor(self.shiftReg, lib.lshift(lib.band(value, 1), 4))
+    local fill = lib.bit_and(self.shiftReg, 1) == 1
+    self.shiftReg = lib.bit_rshift(self.shiftReg, 1)
+    self.shiftReg = lib.bit_or(self.shiftReg, lib.bit_lshift(lib.bit_and(value, 1), 4))
 
     if fill then
-        local reg = lib.band(lib.rshift(addr, 13), 0x03)
+        local reg = lib.bit_and(lib.bit_rshift(addr, 13), 0x03)
 
         if reg == 0 then
             self.ctrl = self.shiftReg
+            updateMirror(self.ctrl)
         elseif reg == 1 then
             self.chrBank0 = self.shiftReg
         elseif reg == 2 then
             self.chrBank1 = self.shiftReg
         else
-            self.prgBank = lib.band(self.shiftReg, 0x0F)
+            self.prgBank = lib.bit_and(self.shiftReg, 0x0F)
         end
 
-        self.shiftReg = 0x10  -- сброс после записи
+        self.shiftReg = 0x10
     end
 
     return nil
@@ -83,14 +100,14 @@ end
 
 
 function mp1:readCHRAddr(addr)
-    addr = lib.band(addr, 0x1FFF)
+    addr = lib.bit_and(addr, 0x1FFF)
 
-    local chrMode = lib.band(lib.rshift(self.ctrl, 4), 0x01)
+    local chrMode = lib.bit_and(lib.bit_rshift(self.ctrl, 4), 0x01)
     local bankOffset
     local finalAddr = addr
 
     if chrMode == 0 then
-        bankOffset = lib.band(self.chrBank0, 0xFE) * 0x1000
+        bankOffset = lib.bit_and(self.chrBank0, 0xFE) * 0x1000
     else
         if addr < 0x1000 then
             bankOffset = self.chrBank0 * 0x1000

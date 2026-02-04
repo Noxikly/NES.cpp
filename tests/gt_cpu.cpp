@@ -1,7 +1,6 @@
 #include <gtest/gtest.h>
-#include "../src/cpu.hpp"
-#include "../src/cartridge.hpp"
-#include "../src/mappers/mapper0.hpp"
+#include "../include/cpu.hpp"
+#include "../include/cartridge.hpp"
 
 
 class CpuTest : public testing::Test {
@@ -539,10 +538,10 @@ TEST_F(CpuTest, MULTIPLY_TEST) {
 
 
 TEST_F(CpuTest, NESTEST) {
-    Cartridge cart;
-    cart.loadNES("tests/roms/nestest.nes");
+    Mapper mapper;
+    mapper.loadNES("tests/roms/nestest.nes");
+    mapper.load();
 
-    Mapper0 mapper(cart);
     Memory memory(&mapper);
     Cpu cpu(&memory);
 
