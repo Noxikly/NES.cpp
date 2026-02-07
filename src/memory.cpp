@@ -52,6 +52,7 @@ void Memory::write(u16 addr, u8 value) {
                         ppu->writeReg(0x2004, data);
                     }
                 }
+                addDma(513);
                 return;
             }
             case 0x4016: {

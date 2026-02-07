@@ -49,28 +49,30 @@ public:
 private:
     u16  pixel{0};       /* PPU dot [0;340]      */
     u16  scanline{0};    /* PPU scanline [0;261] */
-    bool nmi{false};     /* ожидание NMI          */
-    u8   mirrorMode{HORIZONTAL}; /* mirroring     */
+    bool nmi{false};     /* ожидание NMI         */
+    u8   mirrorMode{HORIZONTAL}; /* mirroring    */
     bool oddFrame{false}; /* пропуск цикла у нечётных кадров */
-    
+    u8   openBus{0};     /* open bus             */ 
+
+
     Mapper* mapper{nullptr};
     
     std::array<u8, 4096> vram; /* nametable/attribute RAM  */
     std::array<u8, 32>   pal;  /* palette RAM              */
-    std::array<u8, 256>  oam;  /*         OAM              */
+    std::array<u8, 256>  oam;  /* OAM                      */
     std::array<u32, WIDTH * HEIGHT> frame; /* готовый кадр */
     
 
     struct BgFetch {
         bool valid{false};
-        u16 v{0};       /* VRAM адрес тайла   */
-        u16 pattern{0}; /* база pattern table */
-        u8 p0{0};       /* палитра тайла 0    */
-        u8 l0{0};       /* low byte тайла 0   */
-        u8 h0{0};       /* high byte тайла 0  */
-        u8 p1{0};       /* палитра тайла 1    */
-        u8 l1{0};       /* low byte тайла 1   */
-        u8 h1{0};       /* high byte тайла 1  */
+        u16 v{0};     /* VRAM адрес тайла   */
+        u16 table{0}; /* база pattern table */
+        u8 p0{0};     /* палитра тайла 0    */
+        u8 l0{0};     /* low byte тайла 0   */
+        u8 h0{0};     /* high byte тайла 0  */
+        u8 p1{0};     /* палитра тайла 1    */
+        u8 l1{0};     /* low byte тайла 1   */
+        u8 h1{0};     /* high byte тайла 1  */
     };
 
     BgFetch bgFetch;
@@ -86,6 +88,14 @@ private:
         u8 high; /* pattern high byte        */
     };
     std::array<SpriteData, 8> OAM; /* OAM */
+
+private:
+    /* Булевые функции для рендеринга */
+    inline auto rendering() const -> bool  { return (ppumask & 0x18) != 0; }
+    inline auto visible() const -> bool    { return (scanline < 240); }
+    inline auto preLine() const -> bool    { return (scanline == 261); }
+    inline auto renderLine() const -> bool { return visible() || preLine(); }
+    inline auto renderDot() const -> bool  { return (pixel >= 1 && pixel <= 256); }   
 
 private:
     auto readVRAM (u16 addr) const -> u8;

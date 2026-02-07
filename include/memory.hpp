@@ -16,12 +16,16 @@ public:
     auto read(u16 addr) const -> u8;
     void write(u16 addr, u8 value);
 
-
     void setJoy1(u8 state) { joy1 = state; }
     void setJoy2(u8 state) { joy2 = state; }
 
 
+    void addDma(u32 cycles) { dma += cycles; }
+    auto getDma() -> u32 { const u32 d = dma; dma = 0; return d; }
+
+
     std::array<u8, 2048> ram{}; /* 0x0000-0x07FF */
+    u32 dma{0};
     Mapper* mapper{nullptr};
     Ppu* ppu{nullptr};
 

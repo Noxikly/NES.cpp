@@ -46,18 +46,18 @@ function mp1:readPRGAddr(addr)
 
     if prgMode <= 1 then
         bankOffset = lib.bit_and(self.prgBank, 0xFE) * 0x4000
-        return (bankOffset + addr) % prgSize
+        return (bankOffset + addr)
     elseif prgMode == 2 then
         if addr < 0x4000 then
             return addr
         else
             bankOffset = self.prgBank * 0x4000
-            return (bankOffset + (addr - 0x4000)) % prgSize
+            return (bankOffset + (addr - 0x4000))
         end
     else
         if addr < 0x4000 then
             bankOffset = self.prgBank * 0x4000
-            return (bankOffset + addr) % prgSize
+            return (bankOffset + addr)
         else
             local lastBank = (self.prgBankCount - 1) * 0x4000
             return lastBank + (addr - 0x4000)
@@ -117,7 +117,7 @@ function mp1:readCHRAddr(addr)
         end
     end
 
-    return (bankOffset + finalAddr) % (self.chrBankCount * 0x1000)
+    return (bankOffset + finalAddr)
 end
 
 

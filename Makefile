@@ -12,10 +12,6 @@ SOURCES := $(wildcard src/*.cpp)
 OBJECTS := $(patsubst src/%.cpp, build/%.o, $(SOURCES))
 
 
-# Тесты
-#include tests.mk
-
-
 all: nes
 
 # Сборка
@@ -32,4 +28,4 @@ build:
 	mkdir -p build
 
 clean:
-	rm -rf build nes test_all
+	rm -rf build nes

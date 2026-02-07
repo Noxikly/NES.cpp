@@ -978,6 +978,11 @@ void Cpu::step() {
 
 
 void Cpu::exec() {
+    if (const u32 d = mem->getDma(); d != 0) {
+        cycles = d;
+        total_cycles += cycles;
+        return;
+    }
     if(do_nmi) {
         do_nmi = false;
         nmi();

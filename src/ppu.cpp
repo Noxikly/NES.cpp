@@ -2,59 +2,63 @@
 
 
 auto Ppu::readReg(u16 addr) -> u8 {
-    addr &= 7;
+    addr &= 0x07;
 
     switch (addr) {
         case 2: {  /* PPUSTATUS */
             const u8 ret = ppustatus;
             ppustatus &= ~0x80;
             w = 0;
+            openBus = ret;
             return ret;
         }
 
         case 4:  /* OAMDATA */
-            return oam[oamaddr];
+            openBus = oam[oamaddr];
+            return openBus;
 
         case 7: {  /* PPUDATA */
             const u16 a = v & 0x3FFF;
             u8 val;
             
-            if (a >= 0x3F00) {
-                val = readVRAM(a);
-                dataBuffer = readVRAM(a & 0x2FFF);
-            } else {
-                val = dataBuffer;
-                dataBuffer = readVRAM(a);
-            }
+            if (rendering() && renderLine() && renderDot()) val = openBus;
+            else if (a >= 0x3F00) { val = readVRAM(a);
+                                    dataBuffer = readVRAM(a & 0x2FFF); } 
+            else                  { val = dataBuffer;
+                                    dataBuffer = readVRAM(a); }
 
             v += (ppuctrl & 0x04) ? 32 : 1;
             return val;
         }
 
         default:
-            return 0;
+            return openBus;
     }
 }
 
 void Ppu::writeReg(u16 addr, u8 data) {
-    addr &= 7;
+    addr &= 0x07;
 
     switch (addr) {
         case 0:  /* PPUCTRL */
             ppuctrl = data;
             t = (t & ~0x0C00) | ((data & 0x03) << 10);
+            openBus = data;
             break;
 
         case 1:  /* PPUMASK */
             ppumask = data;
+            openBus = data;
             break;
 
         case 3:  /* OAMADDR */
             oamaddr = data;
+            openBus = data;
             break;
 
         case 4:  /* OAMDATA */
             oam[oamaddr++] = data;
+            openBus = data;
             break;
 
         case 5:  /* PPUSCROLL */
@@ -66,6 +70,7 @@ void Ppu::writeReg(u16 addr, u8 data) {
                 t = (t & 0x0C1F) | ((data & 0xF8) << 2) | ((data & 0x07) << 12);
                 w = 0;
             }
+            openBus = data;
             break;
 
         case 6:  /* PPUADDR */
@@ -77,60 +82,54 @@ void Ppu::writeReg(u16 addr, u8 data) {
                 v = t;
                 w = 0;
             }
+            openBus = data;
             break;
 
         case 7:  /* PPUDATA */
-            writeVRAM(v & 0x3FFF, data);
+            if (!(rendering() && renderLine() && renderDot()))
+                    writeVRAM(v & 0x3FFF, data);
             v += (ppuctrl & 0x04) ? 32 : 1;
+            openBus = data;
             break;
     }
 }
 
 
 void Ppu::step() {
-    const bool rendering = (ppumask & 0x18) != 0;
-    const bool preLine = (scanline == 261);
-    const bool visible = (scanline < 240);
-    const bool renderLine = (visible || preLine);
-
-
-    if (visible && pixel >= 1 && pixel <= 256)
+    if (visible() && renderDot())
         renderPixel();
 
 
     /* Background fetches и scrolling */
-    if (renderLine && rendering) {
-        if (pixel >= 1 && pixel <= 256 && (pixel & 7) == 0) v = incrementX(v);
+    if (renderLine() && rendering()) {
+        if (renderDot() && (pixel & 7) == 0) v = incrementX(v);
         if (pixel == 256) incrementY();
         if (pixel == 257) reloadX();
-        if (preLine && pixel >= 280 && pixel <= 304) reloadY();
+        if (preLine() && pixel >= 280 && pixel <= 304) reloadY();
     }
 
 
     if (scanline == 241 && pixel == 1) {
         ppustatus |= 0x80;  /* флаг VBlank */
-        if (ppuctrl & 0x80)
-            nmi = true;
+        if (ppuctrl & 0x80) nmi = true;
         frameReady = true;
     }
 
 
-    if (preLine && pixel == 1) {
+    if (preLine() && pixel == 1) {
         ppustatus &= 0x1F;  /* Очистка VBlank, sprite 0 hit, sprite overflow */
         nmi = false;
         frameReady = false;
     }
 
 
-    if (preLine && pixel == 339 && rendering && oddFrame) pixel = 340;
+    if (preLine() && pixel == 339 && rendering() && oddFrame) pixel = 340;
 
 
     /* Mapper */
-    if (mapper && pixel == 260 && visible && rendering)
-        mapper->step();
+    if (mapper && pixel == 260 && visible() && rendering()) mapper->step();
 
-    if (pixel == 340 && renderLine)
-        evalSprites();
+    if (pixel == 340 && renderLine()) evalSprites();
 
 
     if (++pixel > 340) {
@@ -148,7 +147,7 @@ void Ppu::evalSprites() {
     bool overflow = false;
 
     const u16 height = (ppuctrl & 0x20) ? 16 : 8;
-    const u16 y = (scanline + 1) % 262;
+    const u16 y = preLine() ? 0 : scanline + 1;
 
 
     for (u8 i=0; i<64; ++i) {
@@ -166,10 +165,9 @@ void Ppu::evalSprites() {
             entry.id = i;
 
             u8 fineY = static_cast<u8>(y - spriteLine);
-            const bool flipV = (entry.attr & 0x80) != 0;
-            if (flipV) {
+            if ((entry.attr & 0x80) != 0)
                 fineY = static_cast<u8>(height - 1 - fineY);
-            }
+
 
             u16 patAddr;
             if (height == 16) {
@@ -200,9 +198,8 @@ void Ppu::renderPixel() {
 
     /* Background */
     u8 bgPixel = 0, bgPal = 0;
-    if (ppumask & 0x08) {
+    if (ppumask & 0x08)
         backgroundPixel(x, bgPixel, bgPal);
-    }
 
     /* Sprites */
     u8 fgPixel = 0, fgPal = 0, fgPrio = 0;
@@ -217,29 +214,28 @@ void Ppu::renderPixel() {
     }
 
 
-    if (sprite0 && bgPixel != 0)
-        ppustatus |= 0x40;
+    if (rendering())
+        if (sprite0 && bgPixel != 0 && fgPixel != 0)
+            if (x >= 8 || ((ppumask & 0x06) == 0x06))
+                ppustatus |= 0x40;
 
 
     u8 px = bgPixel;
     u8 palGroup = bgPal;
 
-    if (fgPixel != 0) {
+    if (fgPixel != 0)
         if (bgPixel == 0 || fgPrio == 0) {
             px = fgPixel;
             palGroup = fgPal + 4;
         }
-    }
 
 
     u16 paletteAddr = 0x3F00;
-    if (px != 0)
-        paletteAddr = 0x3F00 + (palGroup << 2) + px;
+    if (px != 0) paletteAddr += (palGroup << 2) + px;
 
 
     u8 colorIdx = readVRAM(paletteAddr) & 0x3F;
-    if (ppumask & 0x01)
-        colorIdx &= 0x30;
+    if (ppumask & 0x01) colorIdx &= 0x30;
 
     frame[scanline*WIDTH + x] = palette[colorIdx];
 }
@@ -247,7 +243,7 @@ void Ppu::renderPixel() {
 
 void Ppu::backgroundPixel(u8 x, u8 &pixel, u8 &pal) {
     const u16 fineY = (v >> 12) & 0x07;
-    const u16 pttrn = (ppuctrl & 0x10) ? 0x1000 : 0x0000;
+    const u16 table = (ppuctrl & 0x10) ? 0x1000 : 0x0000;
 
 
     /* загрузка данных о тайле */
@@ -260,22 +256,22 @@ void Ppu::backgroundPixel(u8 x, u8 &pixel, u8 &pal) {
         const u8 shift = ((vv >> 4) & 4) | (vv & 2); /* {0,2,4,6} */
         palOut = (attr >> shift) & 3;
 
-        const u16 pat = pttrn + tileId * 16 + fineY;
+        const u16 pat = table + tileId * 16 + fineY;
         low  = readVRAM(pat);
         high = readVRAM(pat + 8);
     };
 
 
-    if (!bgFetch.valid || bgFetch.v != v || bgFetch.pattern != pttrn) {
+    if (!bgFetch.valid || bgFetch.v != v || bgFetch.table != table) {
         bgFetch.v = v;
-        bgFetch.pattern = pttrn;
+        bgFetch.table = table;
 
         fetchTile(v, bgFetch.p0, bgFetch.l0, bgFetch.h0);
         fetchTile(incrementX(v), bgFetch.p1, bgFetch.l1, bgFetch.h1);
         bgFetch.valid = true;
     }
 
-    const u8 idx = fineX + (x & 7); /* 0..14 */
+    const u8 idx = fineX + (x & 0x07); /* 0..14 */
 
     u8 low = bgFetch.l0, high = bgFetch.h0;
     pal = bgFetch.p0;
@@ -286,7 +282,7 @@ void Ppu::backgroundPixel(u8 x, u8 &pixel, u8 &pal) {
         pal = bgFetch.p1;
     }
 
-    const u8 subX = idx & 7;
+    const u8 subX = idx & 0x07;
     const u8 bit  = 7 - subX;
     pixel = ((low >> bit) & 1) | (((high >> bit) & 1) << 1);
 }
@@ -306,14 +302,14 @@ void Ppu::spritePixel(u8 x, u8 &pixel, u8 &pal, u8 &prio, bool &sprite0) {
 
         const bool flipH = (spr.attr & 0x40) != 0;
         const u8 bit = flipH ? u8(dx) : u8(7 - dx);
-        const u8 sprPixel = ((spr.low >> bit) & 1) | (((spr.high >> bit) & 1) << 1);
+        const u8 sprPixel = ((spr.low >> bit) & 1) | (((spr.high >> bit) & 0x01) << 1);
 
         if (sprPixel == 0) continue;
 
         if (pixel == 0) {
             pixel = sprPixel;
-            pal = spr.attr & 3;
-            prio = (spr.attr >> 5) & 1;
+            pal = spr.attr & 0x03;
+            prio = (spr.attr >> 5) & 0x01;
         }
 
         if (spr.id == 0 && sprPixel != 0)

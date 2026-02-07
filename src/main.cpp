@@ -83,7 +83,7 @@ int main(int argc, char **argv) {
     cpu.reset();
 
 
-    Window win{};
+    Window win;
     if (!sdl_init(&win)) return 1;
 
 
@@ -92,7 +92,7 @@ int main(int argc, char **argv) {
     u8 joy = 0;
 
 
-    const float targetFrameMs = 1000.0f / 60.0f;
+    const float targetFrameMs = 1000.0f / 60.0988f;
 
     while (running) {
         const Uint64 start = SDL_GetTicks();
