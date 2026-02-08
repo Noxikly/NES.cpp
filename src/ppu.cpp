@@ -127,10 +127,9 @@ void Ppu::step() {
 
 
     /* Mapper */
-    if (mapper && pixel == 260 && visible() && rendering()) mapper->step();
+    if (mapper && pixel == 260 && renderLine() && rendering()) mapper->step();
 
     if (pixel == 340 && renderLine()) evalSprites();
-
 
     if (++pixel > 340) {
         pixel = 0;
@@ -208,16 +207,17 @@ void Ppu::renderPixel() {
         spritePixel(x, fgPixel, fgPal, fgPrio, sprite0);
 
 
+    /* Sprite 0 hit */
+    if (rendering())
+        if (sprite0 && bgPixel != 0 && fgPixel != 0)
+            if (x < 255)
+                ppustatus |= 0x40;
+
+
     if (x < 8) {
         if (!(ppumask & 0x02)) bgPixel = 0;
         if (!(ppumask & 0x04)) fgPixel = 0;
     }
-
-
-    if (rendering())
-        if (sprite0 && bgPixel != 0 && fgPixel != 0)
-            if (x >= 8 || ((ppumask & 0x06) == 0x06))
-                ppustatus |= 0x40;
 
 
     u8 px = bgPixel;

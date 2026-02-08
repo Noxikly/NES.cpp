@@ -18,3 +18,11 @@ git clone https://github.com/Noxikly/NES.cpp
 cd NES.cpp
 make -j
 ```
+
+**Windows:**
+Для начала установите MSYS2 и соответствующие зависимости для проекта
+```bash
+git clone https://github.com/Noxikly/NES.cpp
+cd NES.cpp
+make nes_win -j
+```

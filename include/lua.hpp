@@ -153,10 +153,13 @@ private:
 
 
 /* API */
-extern "C"
-{
-    void Cartridge_resize(void* instance, u8 vecType, size_t size);
-    void Cartridge_setMirror(void* instance, u8 mode);
-    void Cartridge_triggerIRQ(void* instance);
-    void Cartridge_clearIRQ(void* instance);
-}
+#ifdef _WIN32
+    #define API_EXPORT extern "C" __declspec(dllexport)
+#else
+    #define API_EXPORT extern "C"
+#endif
+
+API_EXPORT void Cartridge_resize(void* instance, u8 vecType, size_t size);
+API_EXPORT void Cartridge_setMirror(void* instance, u8 mode);
+API_EXPORT void Cartridge_triggerIRQ(void* instance);
+API_EXPORT void Cartridge_clearIRQ(void* instance);
