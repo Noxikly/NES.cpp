@@ -1,10 +1,11 @@
 #pragma once
+
 #include "memory.hpp"
 
 
 class Cpu {
 public:
-    explicit Cpu(Memory *m): mem(m){};
+    explicit Cpu(Memory* m): mem(m){}
     ~Cpu() = default;
 
 
@@ -15,6 +16,7 @@ public:
     auto isPageCrossed() const -> bool { return page_crossed; }
     auto getTotalCycles() const -> u64 { return total_cycles; }
     auto getCycles() const -> u32      { return cycles; }
+    auto getOp() const -> std::string  { return op; }
 
 public:
     enum : u8 {
@@ -40,10 +42,11 @@ public:
     bool do_irq{false};
 
 private:
-    Memory *mem{nullptr};
+    Memory* mem;
 
-    u32  cycles{0};            /* Счетчик циклов для текущей инструкции */
-    u64 total_cycles{0};      /* Счетчик циклов для всех инструкций    */
+    std::string op{""};       /* Текущий опкод */
+    u32  cycles{0};           /* Счетчик циклов для текущей инструкции */
+    u64  total_cycles{0};     /* Счетчик циклов для всех инструкций    */
     bool page_crossed{false}; /* Флаг пересечения границы страницы     */
 
 private:

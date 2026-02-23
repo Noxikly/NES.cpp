@@ -1,14 +1,17 @@
 #pragma once
+
 #include <vector>
 #include <string>
 #include <fstream>
 #include <array>
+#include <filesystem>
+
 #include "constants.hpp"
 
 
 class Cartridge {
 public:
-    void loadNES(const std::string& path) {
+    void loadNES(const std::filesystem::path& path) {
         std::ifstream ROM(path, std::ios::binary);
         if (!ROM) throw std::runtime_error("[LOAD]: Не удалось открыть ROM файл");
 

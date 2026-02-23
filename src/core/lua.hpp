@@ -1,11 +1,16 @@
 #pragma once
-extern "C" {
+
+extern "C" 
+{
     #include <luajit-2.1/luajit.h>
     #include <luajit-2.1/lualib.h>
     #include <luajit-2.1/lauxlib.h>
 }
+
+#include <filesystem>
 #include <stdexcept>
 #include <string>
+
 #include "cartridge.hpp"
 
 
@@ -29,13 +34,23 @@ public:
     ~Lua() { if(L) lua_close(L); }
 
 
-    void open(const std::string& path) {
+    void open(const std::filesystem::path& path) {
         lua_settop(L, 0);
         lua_pushlightuserdata(L, this);
         lua_setglobal(L, "__instance");
 
-        if (luaL_dostring(L, "package.path = 'mappers/?.lua;' .. package.path") != LUA_OK)
-            throw std::runtime_error("[LUA]: " + luaError());
+        const std::filesystem::path mapperDir = path.parent_path();
+
+        lua_getglobal(L, "package");
+        lua_getfield(L, -1, "path");
+        const char* oldPath = lua_tostring(L, -1);
+        const std::string prevPath = oldPath ? oldPath : "";
+        lua_pop(L, 1);
+
+        const std::string newPath = (mapperDir / "?.lua").generic_string() + ";" + prevPath;
+        lua_pushlstring(L, newPath.c_str(), newPath.size());
+        lua_setfield(L, -2, "path");
+        lua_pop(L, 1);
 
         lua_pushinteger(L, PRG_ROM.size());
         lua_setglobal(L, "prgSize");
@@ -48,7 +63,7 @@ public:
 
 
         /* Загружаем файл */
-        if(luaL_dofile(L, path.c_str()) != LUA_OK)
+        if(luaL_dofile(L, path.string().c_str()) != LUA_OK)
             throw std::runtime_error("[LUA]: " + luaError());
 
         if (!lua_istable(L, -1))

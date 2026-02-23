@@ -41,24 +41,20 @@ void Ppu::writeReg(u16 addr, u8 data) {
 
     switch (addr) {
         case 0:  /* PPUCTRL */
-            ppuctrl = data;
+            ppuctrl = openBus = data;
             t = (t & ~0x0C00) | ((data & 0x03) << 10);
-            openBus = data;
             break;
 
         case 1:  /* PPUMASK */
-            ppumask = data;
-            openBus = data;
+            ppumask = openBus = data;
             break;
 
         case 3:  /* OAMADDR */
-            oamaddr = data;
-            openBus = data;
+            oamaddr = openBus = data;
             break;
 
         case 4:  /* OAMDATA */
-            oam[oamaddr++] = data;
-            openBus = data;
+            oam[oamaddr++] = openBus = data;
             break;
 
         case 5:  /* PPUSCROLL */
@@ -375,4 +371,32 @@ auto Ppu::mirrorAddress(u16 addr) const -> u16 {
     }
 
     return (table * 0x400) + offset;
+}
+
+auto Ppu::getPatternTable(u8 table) const -> std::array<u8, 128 * 128> {
+    std::array<u8, 128 * 128> pixels{};
+    const u16 base = (table & 1) ? 0x1000 : 0x0000;
+
+    for (u16 tileY=0; tileY<16; ++tileY) {
+        for (u16 tileX=0; tileX<16; ++tileX) {
+            const u16 tile = tileY * 16 + tileX;
+            const u16 tileBase = base + tile * 16;
+
+            for (u16 row=0; row<8; ++row) {
+                const u8 low = readVRAM(tileBase + row);
+                const u8 high = readVRAM(tileBase + row + 8);
+
+                for (u16 col=0; col<8; ++col) {
+                    const u8 bit = 7 - col;
+                    const u8 value = ((low >> bit) & 0x01) | (((high >> bit) & 0x01) << 1);
+
+                    const u16 x = tileX * 8 + col;
+                    const u16 y = tileY * 8 + row;
+                    pixels[y * 128 + x] = value;
+                }
+            }
+        }
+    }
+
+    return pixels;
 }

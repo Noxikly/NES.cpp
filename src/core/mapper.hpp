@@ -1,5 +1,8 @@
 #pragma once
+
 #include <string>
+#include <filesystem>
+
 #include "lua.hpp"
 
 
@@ -7,8 +10,8 @@ class Mapper : public Lua {
 public:
     Mapper() = default;
 
-    void load(const std::string& srcPath = "mappers/") {
-        std::string path = srcPath + "mp" + std::to_string(mapperNumber) + ".lua";
+    void load(const std::filesystem::path& srcPath = "mappers/") {
+        std::filesystem::path path = srcPath / ("mp" + std::to_string(mapperNumber) + ".lua");
         open(path);
     }
 
