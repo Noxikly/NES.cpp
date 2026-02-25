@@ -26,7 +26,7 @@ function mp2:readPRGAddr(addr)
 end
 
 function mp2:writePRGAddr(addr, value)
-    self.prgBank = lib.bit_and(value, self.cntBank - 1)
+    self.prgBank = lib.maskBank(value, self.cntBank)
     return nil
 end
 

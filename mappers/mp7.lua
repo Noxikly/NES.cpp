@@ -15,7 +15,7 @@ end
 
 function mp7:readPRGAddr(addr)
     addr = addr - 0x8000
-    local bankOffset = self.prgBank * 0x8000
+    local bankOffset = lib.maskBank(self.prgBank, self.prgBankCount) * 0x8000
     return (bankOffset + addr)
 end
 
@@ -24,7 +24,7 @@ function mp7:writePRGAddr(addr, value)
         return nil
     end
 
-    self.prgBank = lib.bit_and(value, 0x0F)
+    self.prgBank = lib.bit_and(value, 0x07)
 
     if lib.bit_and(value, 0x10) == 0 then
         lib.setMirror(lib.MIRROR_SINGLE_SCREEN_A)

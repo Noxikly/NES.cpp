@@ -10,10 +10,9 @@ function mp3:init()
 
     if self.chrRAM then
         lib.resizeCHR(0x2000)
-        self.chrBankMask = 0
+        self.chrBankCount = 1
     else
-        local chrBankCount = chrSize / 0x2000
-        self.chrBankMask = chrBankCount-1
+        self.chrBankCount = chrSize / 0x2000
     end
 end
 
@@ -22,7 +21,7 @@ function mp3:readPRGAddr(addr)
 end
 
 function mp3:writePRGAddr(addr, value)
-    self.chrBank = lib.bit_and(value, self.chrBankMask)
+    self.chrBank = lib.maskBank(value, self.chrBankCount)
     return nil
 end
 

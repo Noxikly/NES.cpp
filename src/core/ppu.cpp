@@ -373,7 +373,7 @@ auto Ppu::mirrorAddress(u16 addr) const -> u16 {
     return (table * 0x400) + offset;
 }
 
-auto Ppu::getPatternTable(u8 table) const -> std::array<u8, 128 * 128> {
+auto Ppu::getPttrnTable(u8 table) const -> std::array<u8, 128 * 128> {
     std::array<u8, 128 * 128> pixels{};
     const u16 base = (table & 1) ? 0x1000 : 0x0000;
 

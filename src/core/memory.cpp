@@ -11,12 +11,12 @@ auto Memory::read(u16 addr) const -> u8 {
     if (addr < 0x4020) {
         switch (addr) {
             case 0x4016: {
-                const u8 value = ((joy1Shift & 1) | 0x40 );
+                const u8 value = ((joy1Shift & 0x01) | 0x40 );
                 joy1Shift >>= 1;
                 return value;
             }
             case 0x4017: {
-                const u8 value = ((joy2Shift & 1) | 0x40 );
+                const u8 value = ((joy2Shift & 0x01) | 0x40 );
                 joy2Shift >>= 1;
                 return value;
             }
@@ -56,7 +56,7 @@ void Memory::write(u16 addr, u8 value) {
                 return;
             }
             case 0x4016: {
-                if (value & 1) {
+                if (value & 0x01) {
                     joy1Shift = joy1;
                     joy2Shift = joy2;
                 }

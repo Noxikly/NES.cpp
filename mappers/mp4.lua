@@ -32,10 +32,10 @@ function mp4:getPRGBank(addr)
     addr = addr - 0x8000
     local bankIdx = lib.bit_rshift(addr, 13)
     
-    local r6 = lib.bit_and(self.regs[7], self.cntPRG-1)
-    local r7 = lib.bit_and(self.regs[8], self.cntPRG-1)
-    local lastSecond = self.cntPRG-2
-    local last = self.cntPRG-1
+    local r6 = lib.maskBank(self.regs[7], self.cntPRG)
+    local r7 = lib.maskBank(self.regs[8], self.cntPRG)
+    local lastSecond = lib.maskBank(self.cntPRG-2, self.cntPRG)
+    local last = lib.maskBank(self.cntPRG-1, self.cntPRG)
     
     if not self.modePRG then
         if bankIdx==0 then return r6
@@ -64,12 +64,12 @@ function mp4:getCHRBank(addr)
     local r5 = self.regs[6]
     
     -- Применяем маску
-    r0 = lib.bit_and(r0, self.cntCHR-1)
-    r1 = lib.bit_and(r1, self.cntCHR-1)
-    r2 = lib.bit_and(r2, self.cntCHR-1)
-    r3 = lib.bit_and(r3, self.cntCHR-1)
-    r4 = lib.bit_and(r4, self.cntCHR-1)
-    r5 = lib.bit_and(r5, self.cntCHR-1)
+    r0 = lib.maskBank(r0, self.cntCHR)
+    r1 = lib.maskBank(r1, self.cntCHR)
+    r2 = lib.maskBank(r2, self.cntCHR)
+    r3 = lib.maskBank(r3, self.cntCHR)
+    r4 = lib.maskBank(r4, self.cntCHR)
+    r5 = lib.maskBank(r5, self.cntCHR)
     
     if not self.modeCHR then
         if bankIdx == 0 then return r0

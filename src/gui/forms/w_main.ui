@@ -252,6 +252,7 @@
     </property>
     <addaction name="actionPause"/>
     <addaction name="actionReset"/>
+    <addaction name="actionReload"/>
    </widget>
    
    <widget class="QMenu" name="menuVideo">
@@ -323,6 +324,18 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+R</string>
+   </property>
+  </action>
+
+  <action name="actionReload">
+   <property name="icon">
+    <iconset theme="system-reboot"/>
+   </property>
+   <property name="text">
+    <string>Reload ROM</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+R</string>
    </property>
   </action>
   

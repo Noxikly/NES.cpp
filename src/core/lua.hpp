@@ -27,7 +27,7 @@ protected:
 
 public:
     explicit Lua() : L(luaL_newstate()) {
-        if (!L) throw std::runtime_error("[LUA]: Не удалось создать lua_State");
+        if (!L) throw std::runtime_error("[LUA]: Failed to create lua_State");
         luaL_openlibs(L);
         luaJIT_setmode(L, 0, LUAJIT_MODE_ENGINE | LUAJIT_MODE_ON);
     }
@@ -67,7 +67,7 @@ public:
             throw std::runtime_error("[LUA]: " + luaError());
 
         if (!lua_istable(L, -1))
-            throw std::runtime_error("[LUA]: Скрипт должен возвращать таблицу");
+            throw std::runtime_error("[LUA]: Script must return a table");
 
 
         /* Вызываем init */
@@ -146,7 +146,7 @@ protected:
 
     inline std::string luaError() {
         const char* err = lua_tostring(L, -1);
-        return err ? std::string(err) : std::string("Неизвестная ошибка");
+        return err ? std::string(err) : std::string("Unknown error");
     }
 
     void throwLuaError() {

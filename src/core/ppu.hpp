@@ -22,7 +22,7 @@ public:
     auto nmiPending() const -> bool { return nmi; }
     void clearNmi() { nmi = false; }
     auto getFrame() const -> const u32* { return frame.data(); }
-    auto getPatternTable(u8 table) const -> std::array<u8, 128 * 128>;
+    auto getPttrnTable(u8 table) const -> std::array<u8, 128 * 128>;
     
     bool frameReady{false};
 

@@ -66,6 +66,13 @@ M.cart = cart
 
 -- API для работы с картриджем
 
+-- Маска банка (ограничивает банк до допустимого диапазона)
+function M.maskBank(bank, count)
+    if count == 0 then return 0 end
+    return M.bit_and(bank, count-1)
+end
+
+
 -- изменить размер вектора
 function M.resize(vectorType, size)
     ffi.C.Cartridge_resize(__instance, vectorType, size)
@@ -112,6 +119,7 @@ end
 function M.getIRQ()
     return cart.irqFlag
 end
+
 
 -- Прямое чтение/запись PRG_ROM
 

@@ -11,7 +11,7 @@
 #include <QLabel>
 #include <QImage>
 #include <QPixmap>
-#include <QHBoxLayout>
+#include <QFontDatabase>
 
 #include <filesystem>
 
@@ -60,7 +60,12 @@ WMain::WMain(const QString& romPath, QWidget* parent)
     if (!romPath.isEmpty())
         loadRom(romPath);
 }
-WMain::~WMain() { delete ui; }
+WMain::~WMain() {
+    delete ppuPttrn0;
+    delete ppuPttrn1;
+    delete pttrnRow;
+    delete ui; 
+}
 
 void WMain::clearCore() {
     cpu.reset();
@@ -110,21 +115,25 @@ void WMain::stpDockWidgets() {
     connect(ui->dockCPU, &QDockWidget::visibilityChanged, ui->actionCPU, &QAction::setChecked);
     connect(ui->dockPPU, &QDockWidget::visibilityChanged, ui->actionPPU, &QAction::setChecked);
 
+    const QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    ui->cpuDebugText->setFont(mono);
+    ui->ppuDebugText->setFont(mono);
+
     auto Preview = [](QLabel* label) {
         label->setAlignment(Qt::AlignCenter);
         label->setMinimumSize(150, 150);
         label->setStyleSheet("background-color: #111; border: 1px solid #444;");
     };
 
-    auto* patternRow = new QHBoxLayout();
+    pttrnRow = new QHBoxLayout();
     ppuPttrn0 = new QLabel(ui->dockPPUContents);
     ppuPttrn1 = new QLabel(ui->dockPPUContents);
     Preview(ppuPttrn0);
     Preview(ppuPttrn1);
 
-    patternRow->addWidget(ppuPttrn0);
-    patternRow->addWidget(ppuPttrn1);
-    ui->verticalLayoutPPU->addLayout(patternRow);
+    pttrnRow->addWidget(ppuPttrn0);
+    pttrnRow->addWidget(ppuPttrn1);
+    ui->verticalLayoutPPU->addLayout(pttrnRow);
 }
 
 void WMain::stpMenuActions() {
@@ -152,6 +161,11 @@ void WMain::stpMenuActions() {
             cpu->reset();
             joyState = 0;
         }
+    });
+
+    connect(ui->actionReload, &QAction::triggered, this, [this]() {
+        if (!currRomPath.isEmpty())
+            loadRom(currRomPath);
     });
 
     connect(ui->actionShow_FPS, &QAction::toggled, this, [this](bool) {
@@ -206,7 +220,7 @@ void WMain::loadRom(const QString& romPath) {
 
         mem = std::make_unique<Memory>(mapper.get(), ppu.get());
         cpu = std::make_unique<Cpu>(mem.get());
-        cpu->reset();
+        cpu->powerUp();
 
         currRomPath = romPath;
         romLoaded = true;
@@ -276,22 +290,19 @@ void WMain::updDebugPanels() {
     if (!cpu || !ppu) return;
 
     if (ui->actionCPU->isChecked()) {
+        const auto& dbg = cpu->getDbg();
         ui->cpuDebugText->setPlainText(QString(
-            "OP: %1\n"
-            "A:  0x%2\n"
+            "OP: %1      AM:   %10\n"
+            "A:  0x%2     Addr: 0x%11\n"
             "X:  0x%3\n"
-            "Y:  0x%4\n"
-            "\n"
-            "    NV1BDIZC\n"
-            "P:  %5\n"
-            "\n"
-            "SP: 0x%6\n"
+            "Y:  0x%4         NV1BDIZC\n"
+            "SP: 0x%6     P:  %5\n"
             "PC: 0x%7\n"
             "\n"
             "Cycles (last):  %8\n"
             "Cycles (total): %9"
         )
-        .arg(cpu->getOp())
+        .arg(QString::fromStdString(dbg.op), 3)
         .arg(cpu->regs.A, 2, 16, QChar('0'))
         .arg(cpu->regs.X, 2, 16, QChar('0'))
         .arg(cpu->regs.Y, 2, 16, QChar('0'))
@@ -300,20 +311,17 @@ void WMain::updDebugPanels() {
         .arg(cpu->regs.PC, 4, 16, QChar('0'))
         .arg(cpu->getCycles())
         .arg(cpu->getTotalCycles())
+        .arg(QString::fromStdString(dbg.am), 3)
+        .arg(dbg.addr, 4, 16, QChar('0'))
         );
     }
 
     if (ui->actionPPU->isChecked()) {
         ui->ppuDebugText->setPlainText(QString(
-            "PPUCTRL:   0x%1\n"
-            "PPUMASK:   0x%2\n"
-            "PPUSTATUS: 0x%3\n"
-            "OAMADDR:   0x%4\n"
-            "\n"
-            "V:     0x%5\n"
-            "T:     0x%6\n"
-            "fineX: %7\n"
-            "W:     %8\n"
+            "PPUCTRL:   0x%1     V:     0x%5\n"
+            "PPUMASK:   0x%2     T:     0x%6\n"
+            "PPUSTATUS: 0x%3     fineX: %7\n"
+            "OAMADDR:   0x%4     W:     %8\n"
         )
         .arg(ppu->ppuctrl, 2, 16, QChar('0'))
         .arg(ppu->ppumask, 2, 16, QChar('0'))
@@ -325,8 +333,8 @@ void WMain::updDebugPanels() {
         .arg(ppu->w)
         );
 
-        const QImage pt0 = buildPttrn(ppu->getPatternTable(0));
-        const QImage pt1 = buildPttrn(ppu->getPatternTable(1));
+        const QImage pt0 = buildPttrn(ppu->getPttrnTable(0));
+        const QImage pt1 = buildPttrn(ppu->getPttrnTable(1));
 
         if (ppuPttrn0) {
             ppuPttrn0->setPixmap(QPixmap::fromImage(
@@ -358,7 +366,7 @@ void WMain::updFpsCounter() {
 
 /* Окно */
 void WMain::updWindowTitle() {
-    QString title = QStringLiteral("NES Emulator");
+    QString title = QStringLiteral("NES.cpp");
 
     if (!currRomPath.isEmpty())
         title += QStringLiteral(" - %1").arg(currRomPath.split('/').last());

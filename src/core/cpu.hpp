@@ -9,6 +9,7 @@ public:
     ~Cpu() = default;
 
 
+    void powerUp();
     void reset();
     void exec();
 
@@ -16,7 +17,7 @@ public:
     auto isPageCrossed() const -> bool { return page_crossed; }
     auto getTotalCycles() const -> u64 { return total_cycles; }
     auto getCycles() const -> u32      { return cycles; }
-    auto getOp() const -> std::string  { return op; }
+    auto getDbg() const -> const auto& { return dbg; }
 
 public:
     enum : u8 {
@@ -29,10 +30,10 @@ public:
     };
 
     struct {
-        u8 A{0};      /* Аккумулятор                       */
-        u8 X{0};      /* Индексный регистр X               */
-        u8 Y{0};      /* Индексный регистр Y               */
-        u8 P{UNUSED}; /* Регистр флагов (U=1 по умолчанию) */
+        u8 A{0};          /* Аккумулятор                       */
+        u8 X{0};          /* Индексный регистр X               */
+        u8 Y{0};          /* Индексный регистр Y               */
+        u8 P{UNUSED | I}; /* Регистр флагов (U=1 по умолчанию) */
 
         u8  SP{0xFD}; /* Указатель стека (инициализируется как 0xFD) */
         u16 PC{};     /* Счетчик команд                              */
@@ -41,15 +42,23 @@ public:
     bool do_nmi{false};
     bool do_irq{false};
 
+
+    /* Дебаг режим */
+    struct {
+        std::string op; /* Опкод           */
+        std::string am; /* Режим адресации */
+        u16 addr;       /* Адрес           */
+    } dbg;
+
 private:
     Memory* mem;
 
-    std::string op{""};       /* Текущий опкод */
     u32  cycles{0};           /* Счетчик циклов для текущей инструкции */
     u64  total_cycles{0};     /* Счетчик циклов для всех инструкций    */
     bool page_crossed{false}; /* Флаг пересечения границы страницы     */
 
 private:
+    inline void clear();
     void step();
     void nmi();
     void irq();
@@ -76,31 +85,39 @@ public:
     }
 
 private:
-    static inline auto AM_ACC() -> u16 { return 0; }
-    static inline auto AM_IMP() -> u16 { return 0; }
-    inline auto AM_IMM() -> u16 { return regs.PC++; };
-    inline auto AM_ZPG() -> u16 { return static_cast<u16>(mem->read(regs.PC++)); }
+    inline void dbgSet(const char* am, u16 addr) { dbg.am = am; dbg.addr = addr; }
+
+    inline auto AM_IMP() -> u16 { dbgSet("IMP", 0); return 0; }
+    inline auto AM_IMM() -> u16 { const u16 addr = regs.PC++; dbgSet("IMM", addr); return addr; };
+    inline auto AM_ZPG() -> u16 { const u16 addr = static_cast<u16>(mem->read(regs.PC++)); dbgSet("ZPG", addr); return addr; }
     inline auto AM_ZPX() -> u16 { return (AM_ZPG() + static_cast<u16>(regs.X)) & 0x00FF; }
     inline auto AM_ZPY() -> u16 { return (AM_ZPG() + static_cast<u16>(regs.Y)) & 0x00FF; }
     inline auto AM_REL() -> u16 { const i8 offset = static_cast<i8>(mem->read(regs.PC++));
-                                  return regs.PC + offset; }
-    inline auto AM_ABS() -> u16 { const u16 addr = read16(regs.PC); regs.PC+=2; return addr; }
+                                  const u16 addr = regs.PC + offset;
+                                  dbgSet("REL", addr);
+                                  return addr; }
+    inline auto AM_ABS() -> u16 { const u16 addr = read16(regs.PC); regs.PC+=2; dbgSet("ABS", addr); return addr; }
     inline auto AM_ABX() -> u16 { const u16 addr = AM_ABS();
                                   const u16 indexed_addr = addr + regs.X;
                                   page_crossed = (addr & 0xFF00) != (indexed_addr & 0xFF00);
+                                  dbgSet("ABX", indexed_addr);
                                   return indexed_addr; }
     inline auto AM_ABY() -> u16 { const u16 addr = AM_ABS();
                                   const u16 indexed_addr = addr + regs.Y;
                                   page_crossed = (addr & 0xFF00) != (indexed_addr & 0xFF00);
+                                  dbgSet("ABY", indexed_addr);
                                   return indexed_addr; }
     inline auto AM_IND() -> u16 { const u16 addr = AM_ABS();
                                   const u8 low = mem->read(addr);
                                   const u8 high = mem->read((addr & 0xFF00) | ((addr + 1) & 0x00FF));
-                                  return (static_cast<u16>(high) << 8 | low); }
-    inline auto AM_INX() -> u16 { return read16_zp(AM_ZPX()); }
+                                  const u16 ind = (static_cast<u16>(high) << 8 | low);
+                                  dbgSet("IND", ind);
+                                  return ind; }
+    inline auto AM_INX() -> u16 { const u16 addr = read16_zp(AM_ZPX()); dbgSet("INX", addr); return addr; }
     inline auto AM_INY() -> u16 { const u16 addr = read16_zp(AM_ZPG());
                                   const u16 indexed_addr = addr + regs.Y;
                                   page_crossed = (addr & 0xFF00) != (indexed_addr & 0xFF00);
+                                  dbgSet("INY", indexed_addr);
                                   return indexed_addr; }
 
 

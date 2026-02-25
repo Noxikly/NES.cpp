@@ -4,6 +4,8 @@
 #include <QString>
 #include <QTimer>
 #include <QElapsedTimer>
+#include <QHBoxLayout>
+
 #include <memory>
 
 #include "core/constants.hpp"
@@ -52,6 +54,7 @@ private:
 
     QTimer frameTimer;
     QElapsedTimer fpsTimer;
+    QHBoxLayout* pttrnRow{nullptr};
     QLabel* ppuPttrn0{nullptr};
     QLabel* ppuPttrn1{nullptr};
 
