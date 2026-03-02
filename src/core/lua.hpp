@@ -7,9 +7,11 @@ extern "C"
     #include <luajit-2.1/lauxlib.h>
 }
 
+#include <cstring>
 #include <filesystem>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "cartridge.hpp"
 
@@ -23,11 +25,13 @@ protected:
         IDX_WRITE_PRG = 4,
         IDX_WRITE_CHR = 5,
         IDX_STEP      = 6,
+        IDX_SAVE_STATE = 7,
+        IDX_LOAD_STATE = 8,
     };
 
 public:
     explicit Lua() : L(luaL_newstate()) {
-        if (!L) throw std::runtime_error("[LUA]: Failed to create lua_State");
+        if (!L) throw std::runtime_error("[LUA]: Неудалось создать lua_State");
         luaL_openlibs(L);
         luaJIT_setmode(L, 0, LUAJIT_MODE_ENGINE | LUAJIT_MODE_ON);
     }
@@ -67,7 +71,7 @@ public:
             throw std::runtime_error("[LUA]: " + luaError());
 
         if (!lua_istable(L, -1))
-            throw std::runtime_error("[LUA]: Script must return a table");
+            throw std::runtime_error("[LUA]: Скрипт должен возвращать таблицу");
 
 
         /* Вызываем init */
@@ -86,14 +90,18 @@ public:
         cacheFunc("writePRGAddr");
         cacheFunc("writeCHRAddr");
         cacheFunc("step");
+        cacheFunc("saveState");
+        cacheFunc("loadState");
 
-        lua_settop(L, IDX_STEP);
+        lua_settop(L, IDX_LOAD_STATE);
 
         hasReadPRG  = !lua_isnil(L, IDX_READ_PRG);
         hasReadCHR  = !lua_isnil(L, IDX_READ_CHR);
         hasWritePRG = !lua_isnil(L, IDX_WRITE_PRG);
         hasWriteCHR = !lua_isnil(L, IDX_WRITE_CHR);
         hasStep     = !lua_isnil(L, IDX_STEP);
+        hasSaveState = !lua_isnil(L, IDX_SAVE_STATE);
+        hasLoadState = !lua_isnil(L, IDX_LOAD_STATE);
     }
 
 public:
@@ -105,6 +113,39 @@ public:
             throwLuaError();
     }
 
+    inline std::vector<u8> saveMapperState() {
+        if (!hasSaveState) return {};
+        lua_pushvalue(L, IDX_SAVE_STATE);
+        lua_pushvalue(L, IDX_SELF);
+        if (lua_pcall(L, 1, 1, 0) != LUA_OK)
+            throwLuaError();
+
+        if (lua_isnil(L, -1)) {
+            lua_settop(L, IDX_LOAD_STATE);
+            return {};
+        }
+
+        size_t len = 0;
+        const char* ptr = lua_tolstring(L, -1, &len);
+        std::vector<u8> out;
+        out.resize(len);
+        if (len && ptr)
+            std::memcpy(out.data(), ptr, len);
+
+        lua_settop(L, IDX_LOAD_STATE);
+        return out;
+    }
+
+    inline void loadMapperState(const std::vector<u8>& data) {
+        if (!hasLoadState) return;
+        lua_pushvalue(L, IDX_LOAD_STATE);
+        lua_pushvalue(L, IDX_SELF);
+        lua_pushlstring(L, reinterpret_cast<const char*>(data.data()), data.size());
+        if (lua_pcall(L, 2, 0, 0) != LUA_OK)
+            throwLuaError();
+        lua_settop(L, IDX_LOAD_STATE);
+    }
+
 protected:
     lua_State *L;
     bool hasReadPRG{false};
@@ -112,6 +153,8 @@ protected:
     bool hasWritePRG{false};
     bool hasWriteCHR{false};
     bool hasStep{false};
+    bool hasSaveState{false};
+    bool hasLoadState{false};
 
     inline u32 callFunc(int idx, u16 addr) {
         lua_pushvalue(L, idx);
@@ -120,11 +163,11 @@ protected:
         if (lua_pcall(L, 2, 1, 0) != LUA_OK)
             throwLuaError();
         if (lua_isnil(L, -1)) {
-            lua_settop(L, IDX_STEP);
+            lua_settop(L, IDX_LOAD_STATE);
             return 0xFFFFFFFF;
         }
         const u32 r = static_cast<u32>(lua_tointeger(L, -1));
-        lua_settop(L, IDX_STEP);
+        lua_settop(L, IDX_LOAD_STATE);
         return r;
     }
 
@@ -136,22 +179,22 @@ protected:
         if (lua_pcall(L, 3, 1, 0) != LUA_OK)
             throwLuaError();
         if (lua_isnil(L, -1)) {
-            lua_settop(L, IDX_STEP);
+            lua_settop(L, IDX_LOAD_STATE);
             return 0xFFFFFFFF;
         }
         const u32 r = static_cast<u32>(lua_tointeger(L, -1));
-        lua_settop(L, IDX_STEP);
+        lua_settop(L, IDX_LOAD_STATE);
         return r;
     }
 
     inline std::string luaError() {
         const char* err = lua_tostring(L, -1);
-        return err ? std::string(err) : std::string("Unknown error");
+        return err ? std::string(err) : std::string("Неизвестная ошибка");
     }
 
     void throwLuaError() {
         const std::string err = luaError();
-        lua_settop(L, IDX_STEP);
+        lua_settop(L, IDX_LOAD_STATE);
         throw std::runtime_error("[LUA]: " + err);
     }
 

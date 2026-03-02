@@ -13,8 +13,6 @@
   <property name="windowTitle">
    <string>NES Emulator</string>
   </property>
-  
-  
   <widget class="QWidget" name="centralwidget">
    <layout class="QVBoxLayout" name="verticalLayout">
     <property name="spacing">
@@ -32,12 +30,10 @@
     <property name="bottomMargin">
      <number>0</number>
     </property>
-    
-    
     <item>
      <spacer name="verticalSpacerTop">
       <property name="orientation">
-       <enum>Qt::Vertical</enum>
+       <enum>Qt::Orientation::Vertical</enum>
       </property>
       <property name="sizeHint" stdset="0">
        <size>
@@ -47,8 +43,6 @@
       </property>
      </spacer>
     </item>
-    
-    
     <item>
      <widget class="QFrame" name="nesContainer">
       <property name="sizePolicy">
@@ -64,9 +58,8 @@
        </size>
       </property>
       <property name="frameShape">
-       <enum>QFrame::NoFrame</enum>
+       <enum>QFrame::Shape::NoFrame</enum>
       </property>
-      
       <layout class="QHBoxLayout" name="nesLayout">
        <property name="spacing">
         <number>0</number>
@@ -83,12 +76,10 @@
        <property name="bottomMargin">
         <number>0</number>
        </property>
-       
-       
        <item>
         <spacer name="horizontalSpacerLeft">
          <property name="orientation">
-          <enum>Qt::Horizontal</enum>
+          <enum>Qt::Orientation::Horizontal</enum>
          </property>
          <property name="sizeHint" stdset="0">
           <size>
@@ -98,10 +89,8 @@
          </property>
         </spacer>
        </item>
-       
-       
        <item>
-        <widget class="NESFrame" name="nesScreen" native="true">
+        <widget class="NESFrame" name="nesScreen">
          <property name="sizePolicy">
           <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
            <horstretch>0</horstretch>
@@ -122,12 +111,10 @@
          </property>
         </widget>
        </item>
-       
-       
        <item>
         <spacer name="horizontalSpacerRight">
          <property name="orientation">
-          <enum>Qt::Horizontal</enum>
+          <enum>Qt::Orientation::Horizontal</enum>
          </property>
          <property name="sizeHint" stdset="0">
           <size>
@@ -140,12 +127,10 @@
       </layout>
      </widget>
     </item>
-    
-    
     <item>
      <spacer name="verticalSpacerBottom">
       <property name="orientation">
-       <enum>Qt::Vertical</enum>
+       <enum>Qt::Orientation::Vertical</enum>
       </property>
       <property name="sizeHint" stdset="0">
        <size>
@@ -157,21 +142,19 @@
     </item>
    </layout>
   </widget>
-  
-  
   <widget class="QDockWidget" name="dockCPU">
-   <attribute name="dockWidgetArea">
-    <number>1</number>
-   </attribute>
+   <property name="features">
+    <set>QDockWidget::DockWidgetFeature::DockWidgetClosable|QDockWidget::DockWidgetFeature::DockWidgetMovable</set>
+   </property>
+   <property name="allowedAreas">
+    <set>Qt::DockWidgetArea::LeftDockWidgetArea|Qt::DockWidgetArea::RightDockWidgetArea</set>
+   </property>
    <property name="windowTitle">
     <string>Debug CPU</string>
    </property>
-   <property name="features">
-    <set>QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable</set>
-   </property>
-   <property name="allowedAreas">
-    <set>Qt::LeftDockWidgetArea|Qt::RightDockWidgetArea</set>
-   </property>
+   <attribute name="dockWidgetArea">
+    <number>1</number>
+   </attribute>
    <widget class="QWidget" name="dockCPUContents">
     <layout class="QVBoxLayout" name="verticalLayoutCPU">
      <item>
@@ -182,32 +165,64 @@
          <pointsize>10</pointsize>
         </font>
        </property>
+       <property name="lineWrapMode">
+        <enum>QPlainTextEdit::LineWrapMode::NoWrap</enum>
+       </property>
        <property name="readOnly">
         <bool>true</bool>
-       </property>
-       <property name="lineWrapMode">
-        <enum>QPlainTextEdit::NoWrap</enum>
        </property>
       </widget>
      </item>
     </layout>
    </widget>
   </widget>
-  
-  
-  <widget class="QDockWidget" name="dockPPU">
+  <widget class="QDockWidget" name="dockAPU">
+   <property name="features">
+    <set>QDockWidget::DockWidgetFeature::DockWidgetClosable|QDockWidget::DockWidgetFeature::DockWidgetMovable</set>
+   </property>
+   <property name="allowedAreas">
+    <set>Qt::DockWidgetArea::LeftDockWidgetArea|Qt::DockWidgetArea::RightDockWidgetArea</set>
+   </property>
+   <property name="windowTitle">
+    <string>Debug APU</string>
+   </property>
    <attribute name="dockWidgetArea">
-    <number>2</number>
+    <number>1</number>
    </attribute>
+   <widget class="QWidget" name="dockAPUContents">
+    <layout class="QVBoxLayout" name="verticalLayoutAPU">
+     <item>
+      <widget class="QPlainTextEdit" name="apuDebugText">
+       <property name="font">
+        <font>
+         <family>Consolas</family>
+         <pointsize>10</pointsize>
+        </font>
+       </property>
+       <property name="lineWrapMode">
+        <enum>QPlainTextEdit::LineWrapMode::NoWrap</enum>
+       </property>
+       <property name="readOnly">
+        <bool>true</bool>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="dockPPU">
+   <property name="features">
+    <set>QDockWidget::DockWidgetFeature::DockWidgetClosable|QDockWidget::DockWidgetFeature::DockWidgetMovable</set>
+   </property>
+   <property name="allowedAreas">
+    <set>Qt::DockWidgetArea::LeftDockWidgetArea|Qt::DockWidgetArea::RightDockWidgetArea</set>
+   </property>
    <property name="windowTitle">
     <string>Debug PPU</string>
    </property>
-   <property name="features">
-    <set>QDockWidget::DockWidgetClosable|QDockWidget::DockWidgetMovable</set>
-   </property>
-   <property name="allowedAreas">
-    <set>Qt::LeftDockWidgetArea|Qt::RightDockWidgetArea</set>
-   </property>
+   <attribute name="dockWidgetArea">
+    <number>2</number>
+   </attribute>
    <widget class="QWidget" name="dockPPUContents">
     <layout class="QVBoxLayout" name="verticalLayoutPPU">
      <item>
@@ -226,18 +241,15 @@
     </layout>
    </widget>
   </widget>
-  
-  
   <widget class="QMenuBar" name="menubar">
    <property name="geometry">
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1200</width>
+     <width>960</width>
      <height>30</height>
     </rect>
    </property>
-   
    <widget class="QMenu" name="menuFile">
     <property name="title">
      <string>File</string>
@@ -245,37 +257,41 @@
     <addaction name="actionOpen_ROM"/>
     <addaction name="actionExit"/>
    </widget>
-   
    <widget class="QMenu" name="menuEmulation">
     <property name="title">
      <string>Emulation</string>
     </property>
+    <widget class="QMenu" name="menuState">
+     <property name="title">
+      <string>State</string>
+     </property>
+     <addaction name="actionLoad"/>
+     <addaction name="actionSave"/>
+    </widget>
+    <addaction name="menuState"/>
     <addaction name="actionPause"/>
     <addaction name="actionReset"/>
     <addaction name="actionReload"/>
    </widget>
-   
    <widget class="QMenu" name="menuVideo">
     <property name="title">
      <string>Video</string>
     </property>
     <addaction name="actionShow_FPS"/>
    </widget>
-   
    <widget class="QMenu" name="menuDebug">
     <property name="title">
      <string>Debug</string>
     </property>
+    <addaction name="actionAPU"/>
     <addaction name="actionCPU"/>
     <addaction name="actionPPU"/>
    </widget>
-   
    <addaction name="menuFile"/>
    <addaction name="menuEmulation"/>
    <addaction name="menuVideo"/>
    <addaction name="menuDebug"/>
   </widget>
-
   <action name="actionOpen_ROM">
    <property name="icon">
     <iconset theme="document-open"/>
@@ -287,7 +303,6 @@
     <string>Ctrl+O</string>
    </property>
   </action>
-  
   <action name="actionExit">
    <property name="icon">
     <iconset theme="application-exit"/>
@@ -299,7 +314,6 @@
     <string>F4</string>
    </property>
   </action>
-  
   <action name="actionPause">
    <property name="checkable">
     <bool>true</bool>
@@ -314,7 +328,6 @@
     <string>Space</string>
    </property>
   </action>
-  
   <action name="actionReset">
    <property name="icon">
     <iconset theme="system-shutdown"/>
@@ -326,7 +339,6 @@
     <string>Ctrl+R</string>
    </property>
   </action>
-
   <action name="actionReload">
    <property name="icon">
     <iconset theme="system-reboot"/>
@@ -338,7 +350,6 @@
     <string>Ctrl+Shift+R</string>
    </property>
   </action>
-  
   <action name="actionShow_FPS">
    <property name="checkable">
     <bool>true</bool>
@@ -347,7 +358,6 @@
     <string>Show FPS</string>
    </property>
   </action>
-  
   <action name="actionCPU">
    <property name="checkable">
     <bool>true</bool>
@@ -356,7 +366,14 @@
     <string>CPU</string>
    </property>
   </action>
-  
+  <action name="actionAPU">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>APU</string>
+   </property>
+  </action>
   <action name="actionPPU">
    <property name="checkable">
     <bool>true</bool>
@@ -365,18 +382,31 @@
     <string>PPU</string>
    </property>
   </action>
-  
+  <action name="actionLoad">
+   <property name="icon">
+    <iconset theme="document-open"/>
+   </property>
+   <property name="text">
+    <string>Load</string>
+   </property>
+  </action>
+  <action name="actionSave">
+   <property name="icon">
+    <iconset theme="document-save"/>
+   </property>
+   <property name="text">
+    <string>Save</string>
+   </property>
+  </action>
  </widget>
- 
-  <customwidgets>
-   <customwidget>
-    <class>NESFrame</class>
-    <extends>QFrame</extends>
-    <header>gui/nes_frame.hpp</header>
-    <container>1</container>
-   </customwidget>
-  </customwidgets>
- 
+ <customwidgets>
+  <customwidget>
+   <class>NESFrame</class>
+   <extends>QFrame</extends>
+   <header>gui/nes_frame.hpp</header>
+   <container>1</container>
+  </customwidget>
+ </customwidgets>
  <resources/>
  <connections/>
 </ui>

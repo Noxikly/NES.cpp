@@ -7,8 +7,8 @@
 #include <QHBoxLayout>
 
 #include <memory>
-
 #include "core/constants.hpp"
+#include "nes_audio.hpp"
 
 class Cpu;
 class Mapper;
@@ -45,12 +45,15 @@ private:
     void updWindowTitle();
 
 private:
-    Ui::MainWindow* ui{nullptr};
+    std::unique_ptr<Ui::MainWindow> ui;
 
     std::unique_ptr<Mapper> mapper;
     std::unique_ptr<Ppu> ppu;
     std::unique_ptr<Memory> mem;
     std::unique_ptr<Cpu> cpu;
+    std::unique_ptr<class Apu> apu;
+
+    NesAudio audio;
 
     QTimer frameTimer;
     QElapsedTimer fpsTimer;

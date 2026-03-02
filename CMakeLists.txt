@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.23)
 project(nespp
-        VERSION 0.1.1
+        VERSION 0.2.0
         DESCRIPTION "A simple NES emulator"
         HOMEPAGE_URL "https://github.com/Noxikly/NES.cpp"
         LANGUAGES CXX)
@@ -17,7 +17,7 @@ set(CMAKE_AUTOUIC_SEARCH_PATHS
 
 
 # Qt6
-find_package(Qt6 REQUIRED COMPONENTS Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Multimedia)
 
 # LuaJIT
 find_package(PkgConfig REQUIRED)
@@ -30,8 +30,10 @@ set(SOURCES
     src/core/memory.cpp
     src/core/ppu.cpp
     src/core/lua.cpp
-    src/gui/nes_frame.cpp
+    src/core/apu.cpp
     src/gui/w_main.cpp
+    src/gui/nes_frame.cpp
+    src/gui/nes_audio.cpp
 )
 
 # UI
@@ -66,5 +68,6 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Widgets
+    Qt6::Multimedia
     ${LUAJIT_LIBRARIES}
 )

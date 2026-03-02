@@ -77,6 +77,7 @@ return mp0 -- Обязательно вернуть
 ### Функции
 | Название | Что делает? | Пример |
 | -------- | ----------- | ------ |
+| maskBank(bank, count) | Ограничивает номер банка до допустимого диапазона (0..count-1). Используется, чтобы при переключении банков не выйти за пределы ROM/RAM. | `local b = lib.maskBank(bank, prgSize / 0x2000)` |
 | resizePRG(size) | Изменяет размер PRG-ROM (в байтах) | `lib.resizePRG(32768)` |
 | resizePRG_RAM(size) | Изменяет размер PRG-RAM (в байтах) | `lib.resizePRG_RAM(8192)` |
 | resizeCHR(size) | Изменяет размер CHR-ROM (в байтах) | `lib.resizeCHR(8192)` |

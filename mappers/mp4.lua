@@ -111,7 +111,16 @@ function mp4:writePRGAddr(addr, value)
             self.modePRG = lib.bit_and(value, 0x40) ~= 0
             self.modeCHR = lib.bit_and(value, 0x80) ~= 0
         else
-            self.regs[self.bankSelect + 1] = value
+            local v = lib.bit_and(value, 0xFF)
+            local r = self.bankSelect
+
+            if r == 0 or r == 1 then
+                v = lib.bit_and(v, 0xFE)
+            elseif r == 6 or r == 7 then
+                v = lib.bit_and(v, 0x3F)
+            end
+
+            self.regs[r + 1] = v
         end
         
     elseif addr >= 0xA000 and addr <= 0xBFFF then
@@ -159,14 +168,14 @@ function mp4:writeCHRAddr(addr, value)
 end
 
 function mp4:step()    
-    if self.irqCounter==0 or self.irqReload then
+    if self.irqCounter == 0 or self.irqReload then
         self.irqCounter = self.irqLatch
         self.irqReload = false
     else
         self.irqCounter = self.irqCounter-1
     end
     
-    if self.irqCounter==0 and self.irqEnabled then
+    if self.irqCounter== 0 and self.irqEnabled then
         lib.triggerIRQ()
     end
 end

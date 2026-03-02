@@ -3,21 +3,23 @@
 
 auto Memory::read(u16 addr) const -> u8 {
     if (addr < 0x2000) {
-        return ram[addr & MIRROR];
+        return state.ram[addr & MIRROR];
     }
     if (addr < 0x4000) {
         return (ppu) ? ppu->readReg(addr) : 0;
     }
     if (addr < 0x4020) {
         switch (addr) {
+            case 0x4015:
+                return apu ? apu->readStatus() : 0;
             case 0x4016: {
-                const u8 value = ((joy1Shift & 0x01) | 0x40 );
-                joy1Shift >>= 1;
+                const u8 value = ((state.joy1Shift & 0x01) | 0x40 );
+                state.joy1Shift >>= 1;
                 return value;
             }
             case 0x4017: {
-                const u8 value = ((joy2Shift & 0x01) | 0x40 );
-                joy2Shift >>= 1;
+                const u8 value = ((state.joy2Shift & 0x01) | 0x40 );
+                state.joy2Shift >>= 1;
                 return value;
             }
             default:
@@ -35,7 +37,7 @@ auto Memory::read(u16 addr) const -> u8 {
 
 void Memory::write(u16 addr, u8 value) {
     if (addr < 0x2000) {
-        ram[addr & MIRROR] = value;
+        state.ram[addr & MIRROR] = value;
         return;
     }
     if (addr < 0x4000) {
@@ -43,7 +45,15 @@ void Memory::write(u16 addr, u8 value) {
         return;
     }
     if (addr < 0x4020) {
+        if (addr <= 0x4013) {
+            if (apu) apu->writeReg(addr, value);
+            return;
+        }
+
         switch (addr) {
+            case 0x4015:
+            case 0x4017: if (apu) apu->writeReg(addr, value); return;
+
             case 0x4014: {
                 if (ppu) {
                     const u16 base = value << 8;
@@ -52,13 +62,14 @@ void Memory::write(u16 addr, u8 value) {
                         ppu->writeReg(0x2004, data);
                     }
                 }
-                addDma(513);
+                addDma(state.dmaOdd ? 514 : 513);
+                state.dmaOdd = !state.dmaOdd;
                 return;
             }
             case 0x4016: {
                 if (value & 0x01) {
-                    joy1Shift = joy1;
-                    joy2Shift = joy2;
+                    state.joy1Shift = state.joy1;
+                    state.joy2Shift = state.joy2;
                 }
                 return;
             }

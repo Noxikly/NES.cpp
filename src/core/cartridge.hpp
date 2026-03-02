@@ -38,9 +38,13 @@ public:
 
         /* Чтение CHR ROM */
         if (chrBanks) {
+            chrRam = false;
             CHR_ROM.resize(chrBanks * 0x2000);
             ROM.read(reinterpret_cast<char*>(CHR_ROM.data()), CHR_ROM.size());
             if (!ROM) throw std::runtime_error("[LOAD]: Не удалось прочитать CHR");
+        } else {
+            chrRam = true;
+            CHR_ROM.clear();
         }
     }
 
@@ -51,5 +55,6 @@ public:
     u8 mapperNumber{0};      /* Номер маппера (0-255)             */
     u8 mirrorMode{0};        /* 0 = horizontal, 1 = vertical      */
 
+    bool chrRam{false};
     bool irqFlag{false};
 };

@@ -6,33 +6,34 @@ auto Ppu::readReg(u16 addr) -> u8 {
 
     switch (addr) {
         case 2: {  /* PPUSTATUS */
-            const u8 ret = ppustatus;
-            ppustatus &= ~0x80;
-            w = 0;
-            openBus = ret;
+            const u8 ret = state.ppustatus;
+
+            state.ppustatus &= ~0x80;
+            state.w = 0;
+            state.openBus = ret;
             return ret;
         }
 
         case 4:  /* OAMDATA */
-            openBus = oam[oamaddr];
-            return openBus;
+            state.openBus = state.oam[state.oamaddr];
+            return state.openBus;
 
         case 7: {  /* PPUDATA */
-            const u16 a = v & 0x3FFF;
+            const u16 a = state.v & 0x3FFF;
             u8 val;
             
-            if (rendering() && renderLine() && renderDot()) val = openBus;
+            if (rendering() && renderLine() && renderDot()) val = state.openBus;
             else if (a >= 0x3F00) { val = readVRAM(a);
-                                    dataBuffer = readVRAM(a & 0x2FFF); } 
-            else                  { val = dataBuffer;
-                                    dataBuffer = readVRAM(a); }
+                                    state.dataBuffer = readVRAM(a & 0x2FFF); } 
+            else                  { val = state.dataBuffer;
+                                    state.dataBuffer = readVRAM(a); }
 
-            v += (ppuctrl & 0x04) ? 32 : 1;
+            state.v += (state.ppuctrl & 0x04) ? 32 : 1;
             return val;
         }
 
         default:
-            return openBus;
+            return state.openBus;
     }
 }
 
@@ -41,51 +42,51 @@ void Ppu::writeReg(u16 addr, u8 data) {
 
     switch (addr) {
         case 0:  /* PPUCTRL */
-            ppuctrl = openBus = data;
-            t = (t & ~0x0C00) | ((data & 0x03) << 10);
+            state.ppuctrl = state.openBus = data;
+            state.t = (state.t & ~0x0C00) | ((data & 0x03) << 10);
             break;
 
         case 1:  /* PPUMASK */
-            ppumask = openBus = data;
+            state.ppumask = state.openBus = data;
             break;
 
         case 3:  /* OAMADDR */
-            oamaddr = openBus = data;
+            state.oamaddr = state.openBus = data;
             break;
 
         case 4:  /* OAMDATA */
-            oam[oamaddr++] = openBus = data;
+            state.oam[state.oamaddr++] = state.openBus = data;
             break;
 
         case 5:  /* PPUSCROLL */
-            if (w == 0) {
-                t = (t & ~0x001F) | (data >> 3);
-                fineX = data & 0x07;
-                w = 1;
+            if (state.w == 0) {
+                state.t = (state.t & ~0x001F) | (data >> 3);
+                state.fineX = data & 0x07;
+                state.w = 1;
             } else {
-                t = (t & 0x0C1F) | ((data & 0xF8) << 2) | ((data & 0x07) << 12);
-                w = 0;
+                state.t = (state.t & 0x0C1F) | ((data & 0xF8) << 2) | ((data & 0x07) << 12);
+                state.w = 0;
             }
-            openBus = data;
+            state.openBus = data;
             break;
 
         case 6:  /* PPUADDR */
-            if (w == 0) {
-                t = ((data & 0x3F) << 8) | (t & 0x00FF);
-                w = 1;
+            if (state.w == 0) {
+                state.t = ((data & 0x3F) << 8) | (state.t & 0x00FF);
+                state.w = 1;
             } else {
-                t = (t & 0xFF00) | data;
-                v = t;
-                w = 0;
+                state.t = (state.t & 0xFF00) | data;
+                state.v = state.t;
+                state.w = 0;
             }
-            openBus = data;
+            state.openBus = data;
             break;
 
         case 7:  /* PPUDATA */
             if (!(rendering() && renderLine() && renderDot()))
-                    writeVRAM(v & 0x3FFF, data);
-            v += (ppuctrl & 0x04) ? 32 : 1;
-            openBus = data;
+                    writeVRAM(state.v & 0x3FFF, data);
+            state.v += (state.ppuctrl & 0x04) ? 32 : 1;
+            state.openBus = data;
             break;
     }
 }
@@ -98,65 +99,65 @@ void Ppu::step() {
 
     /* Background fetches и scrolling */
     if (renderLine() && rendering()) {
-        if (renderDot() && (pixel & 7) == 0) v = incrementX(v);
-        if (pixel == 256) incrementY();
-        if (pixel == 257) reloadX();
-        if (preLine() && pixel >= 280 && pixel <= 304) reloadY();
+        if (renderDot() && (state.pixel & 7) == 0) state.v = incrementX(state.v);
+        if (state.pixel == 256) incrementY();
+        if (state.pixel == 257) reloadX();
+        if (preLine() && state.pixel >= 280 && state.pixel <= 304) reloadY();
     }
 
 
-    if (scanline == 241 && pixel == 1) {
-        ppustatus |= 0x80;  /* флаг VBlank */
-        if (ppuctrl & 0x80) nmi = true;
+    if (state.scanline == 241 && state.pixel == 1) {
+        state.ppustatus |= 0x80;  /* флаг VBlank */
+        if (state.ppuctrl & 0x80) state.nmi = true;
         frameReady = true;
     }
 
 
-    if (preLine() && pixel == 1) {
-        ppustatus &= 0x1F;  /* Очистка VBlank, sprite 0 hit, sprite overflow */
-        nmi = false;
+    if (preLine() && state.pixel == 1) {
+        state.ppustatus &= 0x1F;  /* Очистка VBlank, sprite 0 hit, sprite overflow */
+        state.nmi = false;
         frameReady = false;
     }
 
 
-    if (preLine() && pixel == 339 && rendering() && oddFrame) pixel = 340;
+    if (preLine() && state.pixel == 339 && rendering() && state.oddFrame) state.pixel = 340;
 
 
     /* Mapper */
-    if (mapper && pixel == 260 && renderLine() && rendering()) mapper->step();
+    if (mapper && state.pixel == 260 && renderLine() && rendering()) mapper->step();
 
-    if (pixel == 340 && renderLine()) evalSprites();
+    if (state.pixel == 340 && renderLine()) evalSprites();
 
-    if (++pixel > 340) {
-        pixel = 0;
-        if (++scanline > 261) {
-            scanline = 0;
-            oddFrame = !oddFrame;
+    if (++state.pixel > 340) {
+        state.pixel = 0;
+        if (++state.scanline > 261) {
+            state.scanline = 0;
+            state.oddFrame = !state.oddFrame;
         }
     }
 }
 
 
 void Ppu::evalSprites() {
-    spriteCount = 0;
+    state.spriteCount = 0;
     bool overflow = false;
 
-    const u16 height = (ppuctrl & 0x20) ? 16 : 8;
-    const u16 y = preLine() ? 0 : scanline + 1;
+    const u16 height = (state.ppuctrl & 0x20) ? 16 : 8;
+    const u16 y = preLine() ? 0 : state.scanline + 1;
 
 
     for (u8 i=0; i<64; ++i) {
-        const u16 spriteLine = static_cast<u16>(oam[i * 4]) + 1;
+        const u16 spriteLine = static_cast<u16>(state.oam[i * 4]) + 1;
         if (spriteLine >= 256) continue;
         if (y < spriteLine || y >= spriteLine + height) continue;
 
 
-        if (spriteCount < 8) {
-            auto& entry = OAM[spriteCount];
-            entry.x = oam[i * 4 + 3];
+        if (state.spriteCount < 8) {
+            auto& entry = state.OAM[state.spriteCount];
+            entry.x = state.oam[i * 4 + 3];
             entry.y = static_cast<u8>(spriteLine);
-            entry.tile = oam[i * 4 + 1];
-            entry.attr = oam[i * 4 + 2];
+            entry.tile = state.oam[i * 4 + 1];
+            entry.attr = state.oam[i * 4 + 2];
             entry.id = i;
 
             u8 fineY = static_cast<u8>(y - spriteLine);
@@ -171,35 +172,35 @@ void Ppu::evalSprites() {
                 const u8 row = fineY & 7;
                 patAddr = bank + tileIndex * 16 + row;
             } else {
-                const u16 bank = (ppuctrl & 0x08) ? 0x1000 : 0x0000;
+                const u16 bank = (state.ppuctrl & 0x08) ? 0x1000 : 0x0000;
                 patAddr = bank + entry.tile * 16 + fineY;
             }
 
             entry.low = readVRAM(patAddr);
             entry.high = readVRAM(patAddr + 8);
-            spriteCount++;
+            state.spriteCount++;
         } else {
             overflow = true;
         }
     }
 
     if (overflow)
-        ppustatus |= 0x20;
+        state.ppustatus |= 0x20;
 }
 
 
 void Ppu::renderPixel() {
-    const u8 x = pixel - 1;
+    const u8 x = state.pixel - 1;
 
     /* Background */
     u8 bgPixel = 0, bgPal = 0;
-    if (ppumask & 0x08)
+    if (state.ppumask & 0x08)
         backgroundPixel(x, bgPixel, bgPal);
 
     /* Sprites */
     u8 fgPixel = 0, fgPal = 0, fgPrio = 0;
     bool sprite0 = false;
-    if (ppumask & 0x10)
+    if (state.ppumask & 0x10)
         spritePixel(x, fgPixel, fgPal, fgPrio, sprite0);
 
 
@@ -207,12 +208,12 @@ void Ppu::renderPixel() {
     if (rendering())
         if (sprite0 && bgPixel != 0 && fgPixel != 0)
             if (x < 255)
-                ppustatus |= 0x40;
+                state.ppustatus |= 0x40;
 
 
     if (x < 8) {
-        if (!(ppumask & 0x02)) bgPixel = 0;
-        if (!(ppumask & 0x04)) fgPixel = 0;
+        if (!(state.ppumask & 0x02)) bgPixel = 0;
+        if (!(state.ppumask & 0x04)) fgPixel = 0;
     }
 
 
@@ -231,15 +232,15 @@ void Ppu::renderPixel() {
 
 
     u8 colorIdx = readVRAM(paletteAddr) & 0x3F;
-    if (ppumask & 0x01) colorIdx &= 0x30;
+    if (state.ppumask & 0x01) colorIdx &= 0x30;
 
-    frame[scanline*WIDTH + x] = palette[colorIdx];
+    frame[state.scanline*WIDTH + x] = PALETTE[colorIdx];
 }
 
 
 void Ppu::backgroundPixel(u8 x, u8 &pixel, u8 &pal) {
-    const u16 fineY = (v >> 12) & 0x07;
-    const u16 table = (ppuctrl & 0x10) ? 0x1000 : 0x0000;
+    const u16 fineY = (state.v >> 12) & 0x07;
+    const u16 table = (state.ppuctrl & 0x10) ? 0x1000 : 0x0000;
 
 
     /* загрузка данных о тайле */
@@ -258,29 +259,29 @@ void Ppu::backgroundPixel(u8 x, u8 &pixel, u8 &pal) {
     };
 
 
-    if (!bgFetch.valid || bgFetch.v != v || bgFetch.table != table) {
-        bgFetch.v = v;
-        bgFetch.table = table;
+    if (!state.bgFetch.valid || state.bgFetch.v != state.v || state.bgFetch.table != table) {
+        state.bgFetch.v = state.v;
+        state.bgFetch.table = table;
 
-        fetchTile(v, bgFetch.p0, bgFetch.l0, bgFetch.h0);
-        fetchTile(incrementX(v), bgFetch.p1, bgFetch.l1, bgFetch.h1);
-        bgFetch.valid = true;
+        fetchTile(state.v, state.bgFetch.p0, state.bgFetch.l0, state.bgFetch.h0);
+        fetchTile(incrementX(state.v), state.bgFetch.p1, state.bgFetch.l1, state.bgFetch.h1);
+        state.bgFetch.valid = true;
     }
 
-    const u8 idx = fineX + (x & 0x07); /* 0..14 */
+    const u8 idx = state.fineX + (x & 0x07); /* 0..14 */
 
-    u8 low = bgFetch.l0, high = bgFetch.h0;
-    pal = bgFetch.p0;
+    u8 low = state.bgFetch.l0, high = state.bgFetch.h0;
+    pal = state.bgFetch.p0;
 
     if (idx >= 8) {
-        low = bgFetch.l1;
-        high = bgFetch.h1;
-        pal = bgFetch.p1;
+        low = state.bgFetch.l1;
+        high = state.bgFetch.h1;
+        pal = state.bgFetch.p1;
     }
 
     const u8 subX = idx & 0x07;
     const u8 bit  = 7 - subX;
-    pixel = ((low >> bit) & 1) | (((high >> bit) & 1) << 1);
+    pixel = ((low >> bit) & 0x01) | (((high >> bit) & 0x01) << 1);
 }
 
 
@@ -289,8 +290,8 @@ void Ppu::spritePixel(u8 x, u8 &pixel, u8 &pal, u8 &prio, bool &sprite0) {
     sprite0 = false;
 
 
-    for (u8 i=0; i<spriteCount; ++i) {
-        const auto& spr = OAM[i];
+    for (u8 i=0; i<state.spriteCount; ++i) {
+        const auto& spr = state.OAM[i];
 
         if (x < spr.x || x >= spr.x + 8) continue;
         i16 dx = (i16)x - (i16)spr.x;
@@ -322,7 +323,7 @@ auto Ppu::readVRAM(u16 addr) const -> u8 {
     }
     
     if (addr < 0x3F00) {
-        return vram[mirrorAddress(addr)];
+        return state.vram[mirrorAddress(addr)];
     }
 
     if (addr < 0x4000) {
@@ -330,7 +331,7 @@ auto Ppu::readVRAM(u16 addr) const -> u8 {
         /* Зеркалирование 0x3F10/14/18/1C -> 0x3F00/04/08/0C */
         if ((idx & 0x13) == 0x10)
             idx &= 0x0F;
-        return pal[idx] & 0x3F;
+        return state.pal[idx] & 0x3F;
     }
 
     return 0;
@@ -338,20 +339,20 @@ auto Ppu::readVRAM(u16 addr) const -> u8 {
 
 void Ppu::writeVRAM(u16 addr, u8 data) {
     addr &= 0x3FFF;
-    bgFetch.valid = false;
+    state.bgFetch.valid = false;
 
     if (addr < 0x2000) {
         if (mapper) mapper->writeCHR(addr, data);
     }
     else if (addr < 0x3F00) {
-        vram[mirrorAddress(addr)] = data;
+        state.vram[mirrorAddress(addr)] = data;
     }
     else if (addr < 0x4000) {
         u8 idx = addr & 0x1F;
         /* Зеркалирование записи 0x3F10/14/18/1C -> 0x3F00/04/08/0C  */
         if ((idx & 0x13) == 0x10)
             idx &= 0x0F;
-        pal[idx] = data & 0x3F;
+        state.pal[idx] = data & 0x3F;
     }
 }
 
@@ -361,7 +362,7 @@ auto Ppu::mirrorAddress(u16 addr) const -> u16 {
     const u16 offset = addr & 0x03FF;
     u16 table = (addr >> 10) & 0x03;
 
-    const u8 mode = mapper ? mapper->mirrorMode : mirrorMode;
+    const u8 mode = mapper ? mapper->mirrorMode : state.mirrorMode;
     switch (mode) {
         case HORIZONTAL:  table = (table < 2) ? 0 : 1; break; /* A,A,B,B */
         case VERTICAL:    table &= 1; break;                  /* A,B,A,B */

@@ -49,4 +49,40 @@ public:
 
     inline void writeRAM(u16 addr, u8 value) { PRG_RAM[addr & 0x1FFF] = value; }
 
+public:
+    struct State {
+        u8 mapperNumber{0};
+        u8 mirrorMode{0};
+        bool irqFlag{false};
+        std::vector<u8> prgRam;
+        std::vector<u8> chrRam;
+        std::vector<u8> mapperBlob;
+    } state;
+
+    auto getState() -> State {
+        State s;
+        s.mapperNumber = mapperNumber;
+        s.mirrorMode = mirrorMode;
+        s.irqFlag = irqFlag;
+        s.prgRam = PRG_RAM;
+        if (chrRam)
+            s.chrRam = CHR_ROM;
+        s.mapperBlob = saveMapperState();
+        state = s;
+        return s;
+    }
+
+    void loadState(const State& state) {
+        mapperNumber = state.mapperNumber;
+        mirrorMode = state.mirrorMode;
+        irqFlag = state.irqFlag;
+        if (!state.prgRam.empty())
+            PRG_RAM = state.prgRam;
+        if (chrRam && !state.chrRam.empty())
+            CHR_ROM = state.chrRam;
+        loadMapperState(state.mapperBlob);
+        this->state = state;
+    }
+
 };
+
