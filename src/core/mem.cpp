@@ -1,7 +1,8 @@
-#include "memory.hpp"
+#include "mem.hpp"
+#include "common.hpp"
+#include "apu.hpp"
 
-
-auto Memory::read(u16 addr) const -> u8 {
+u8 Memory::read(u16 addr) const {
     if (addr < 0x2000) {
         return state.ram[addr & MIRROR];
     }
@@ -45,15 +46,17 @@ void Memory::write(u16 addr, u8 value) {
         return;
     }
     if (addr < 0x4020) {
-        if (addr <= 0x4013) {
-            if (apu) apu->writeReg(addr, value);
-            return;
-        }
-
         switch (addr) {
-            case 0x4015:
-            case 0x4017: if (apu) apu->writeReg(addr, value); return;
-
+            case 0x4000: case 0x4001: case 0x4002: case 0x4003:
+            case 0x4004: case 0x4005: case 0x4006: case 0x4007:
+            case 0x4008: case 0x4009: case 0x400A: case 0x400B:
+            case 0x400C: case 0x400D: case 0x400E: case 0x400F:
+            case 0x4010: case 0x4011: case 0x4012: case 0x4013:
+            case 0x4015: case 0x4017:
+                if (apu) {
+                    apu->writeReg(addr, value);
+                }
+                return;
             case 0x4014: {
                 if (ppu) {
                     const u16 base = value << 8;

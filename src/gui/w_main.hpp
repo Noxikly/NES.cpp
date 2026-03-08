@@ -7,15 +7,16 @@
 #include <QHBoxLayout>
 
 #include <memory>
-#include "core/constants.hpp"
-#include "nes_audio.hpp"
+#include "core/common.hpp"
 
-class Cpu;
+class CPU;
+class APU;
 class Mapper;
 class Memory;
-class Ppu;
+class PPU;
 class QKeyEvent;
 class QLabel;
+class NesAudio;
 
 namespace Ui {
     class MainWindow;
@@ -26,12 +27,17 @@ public:
     explicit WMain(const QString& romPath = QString(), QWidget* parent = nullptr);
     ~WMain() override;
 
+    enum class Region : u8 {
+        NTSC = 0,
+        PAL = 1,
+    };
+
 protected:
     void keyPressEvent(QKeyEvent* event) override;
     void keyReleaseEvent(QKeyEvent* event) override;
 
 private:
-    static u8 joyMaskForKey(u32 key);
+    static u8 joyMaskKey(u32 key);
 
     void stpDockWidgets();
     void stpMenuActions();
@@ -43,29 +49,30 @@ private:
     void updDebugPanels();
     void updFpsCounter();
     void updWindowTitle();
+    void applyRegion(Region region);
+    double ppuPerCpu() const;
 
 private:
     std::unique_ptr<Ui::MainWindow> ui;
 
     std::unique_ptr<Mapper> mapper;
-    std::unique_ptr<Ppu> ppu;
+    std::unique_ptr<PPU> ppu;
+    std::unique_ptr<APU> apu;
     std::unique_ptr<Memory> mem;
-    std::unique_ptr<Cpu> cpu;
-    std::unique_ptr<class Apu> apu;
-
-    NesAudio audio;
+    std::unique_ptr<CPU> cpu;
+    std::unique_ptr<NesAudio> audio;
 
     QTimer frameTimer;
     QElapsedTimer fpsTimer;
-    QHBoxLayout* pttrnRow{nullptr};
-    QLabel* ppuPttrn0{nullptr};
-    QLabel* ppuPttrn1{nullptr};
 
     qsizetype FpsUpdate{0};
     double currFps{0.0};
 
     QString currRomPath;
     u8 joyState{0};
+
+    Region emuRegion{Region::NTSC};
+    double ppuCyclesDebt{0.0};
 
     bool romLoaded{false};
     bool paused{false};

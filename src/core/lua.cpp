@@ -1,4 +1,8 @@
+#include <stddef.h>
+
+#include "cartridge.hpp"
 #include "lua.hpp"
+#include "common.hpp"
 
 
 enum VecType : int
@@ -20,7 +24,7 @@ API_EXPORT void Cartridge_resize(void* instance, u8 vecType, size_t size) {
 }
 
 API_EXPORT void Cartridge_setMirror(void* instance, u8 mode) {
-    static_cast<Cartridge*>(instance)->mirrorMode = mode;
+    static_cast<Cartridge*>(instance)->mirror = static_cast<Cartridge::MirrorMode>(mode);
 }
 
 API_EXPORT void Cartridge_triggerIRQ(void* instance) {

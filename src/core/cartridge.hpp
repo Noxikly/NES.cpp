@@ -1,60 +1,59 @@
 #pragma once
 
-#include <vector>
-#include <string>
-#include <fstream>
 #include <array>
 #include <filesystem>
+#include <vector>
 
-#include "constants.hpp"
+#include "common.hpp"
 
+namespace Core {
+class Cartridge;
+}
 
 class Cartridge {
 public:
-    void loadNES(const std::filesystem::path& path) {
-        std::ifstream ROM(path, std::ios::binary);
-        if (!ROM) throw std::runtime_error("[LOAD]: Не удалось открыть ROM файл");
+    explicit Cartridge() = default;
+    ~Cartridge() = default;
 
-
-        std::array<u8, 16> header{};
-        ROM.read(reinterpret_cast<char*>(header.data()), 16);
-        if (!ROM || std::string(&header[0], &header[4]) != "NES\x1A")
-            throw std::runtime_error("[LOAD]: Неверный iNES заголовок");
-
-        /* Парсинг заголовка */
-        const u8 prgBanks = header[4];  /* Количество 16KB банков PRG ROM */
-        const u8 chrBanks = header[5];  /* Количество 8KB банков CHR ROM  */
-        const u8 flags6 = header[6];    /* Флаги 6 */
-        const u8 flags7 = header[7];    /* Флаги 7 */
-
-
-        mirrorMode = (flags6 & 0x01);  /* 0 = horizontal, 1 = vertical */
-        mapperNumber = (flags7 & 0xF0) | (flags6 >> 4);
-
-        /* Чтение PRG ROM */
-        PRG_ROM.resize(prgBanks * 0x4000);
-        ROM.read(reinterpret_cast<char*>(PRG_ROM.data()), PRG_ROM.size());
-        if (!ROM) throw std::runtime_error("[LOAD]: Не удалось прочитать PRG");
-
-        /* Чтение CHR ROM */
-        if (chrBanks) {
-            chrRam = false;
-            CHR_ROM.resize(chrBanks * 0x2000);
-            ROM.read(reinterpret_cast<char*>(CHR_ROM.data()), CHR_ROM.size());
-            if (!ROM) throw std::runtime_error("[LOAD]: Не удалось прочитать CHR");
-        } else {
-            chrRam = true;
-            CHR_ROM.clear();
-        }
-    }
+    void loadNES(const std::filesystem::path& path);
 
 public:
-    std::vector<u8> PRG_ROM; /* Program ROM (код)                 */
-    std::vector<u8> PRG_RAM = std::vector<u8>(0x2000, 0); /* SRAM */
-    std::vector<u8> CHR_ROM; /* Character ROM (спрайты)           */
-    u8 mapperNumber{0};      /* Номер маппера (0-255)             */
-    u8 mirrorMode{0};        /* 0 = horizontal, 1 = vertical      */
+    enum MirrorMode : u8 {
+        HORIZONTAL  = 0,  /* [A,A,B,B] */
+        VERTICAL    = 1,  /* [A,B,A,B] */
+        FOUR        = 2,  /* [A,B,C,D] */
+        SINGLE_DOWN = 3,  /* [A,A,A,A] */
+        SINGLE_UP   = 4,  /* [B,B,B,B] */
+    } mirror{HORIZONTAL};
 
+    struct NESFormat {
+        std::array<u8, 16> raw{};
+
+        inline bool valid() const {
+            return raw[0] == 'N'
+                && raw[1] == 'E'
+                && raw[2] == 'S'
+                && raw[3] == 0x1A;
+        }
+
+        inline u8 prg_banks() const { return raw[4]; }
+        inline u8 chr_banks() const { return raw[5]; }
+        inline u8 flags6() const { return raw[6]; }
+        inline u8 flags7() const { return raw[7]; }
+
+        inline bool has_trainer() const { return (flags6() & 0x04) != 0; }
+        inline u8 mapper() const { return static_cast<u8>((flags7() & 0xF0) | (flags6() >> 4)); }
+        inline MirrorMode mirroring() const { return (flags6() & 0x01) ? VERTICAL : HORIZONTAL; }
+        inline bool chr_is_ram() const { return chr_banks() == 0; }
+
+    } fmt{};
+
+public:
+    std::vector<u8> PRG_ROM;                           /* Program ROM (код)       */
+    std::vector<u8> PRG_RAM{std::vector<u8>(0x2000)};  /* SRAM                    */
+    std::vector<u8> CHR_ROM;                           /* Character ROM (спрайты) */
+
+    u8 mapperNumber{0};                                /* Номер маппера (0-255)   */
     bool chrRam{false};
     bool irqFlag{false};
 };

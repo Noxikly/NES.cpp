@@ -1,27 +1,49 @@
-#include "w_main.hpp"
-#include "nes_state.hpp"
-#include "ui_w_main.h"
-
-#include <QFileDialog>
-#include <QKeyEvent>
-#include <QMessageBox>
-#include <QDockWidget>
 #include <QAction>
+#include <QActionGroup>
 #include <QCoreApplication>
 #include <QDir>
-#include <QLabel>
-#include <QImage>
-#include <QPixmap>
+#include <QDockWidget>
+#include <QFileDialog>
 #include <QFontDatabase>
+#include <QImage>
+#include <QKeyEvent>
+#include <QLabel>
+#include <QMessageBox>
+#include <QPixmap>
+
+#include "w_main.hpp"
+#include "ui_w_main.h"
+#include "nes_state.hpp"
 
 #include <filesystem>
 
 #include "core/cpu.hpp"
-#include "core/mapper.hpp"
-#include "core/memory.hpp"
-#include "core/ppu.hpp"
 #include "core/apu.hpp"
+#include "core/mapper.hpp"
+#include "core/mem.hpp"
+#include "core/ppu.hpp"
+#include "core/common.hpp"
+#include "nes_audio.hpp"
 
+namespace {
+auto toAddrModeString(CPU::C6502::AddrMode am) -> const char* {
+    switch (am) {
+        case CPU::C6502::IMM:  return "IMM";
+        case CPU::C6502::IMP:  return "IMP";
+        case CPU::C6502::ZPG:  return "ZPG";
+        case CPU::C6502::ZPGX: return "ZPX";
+        case CPU::C6502::ZPGY: return "ZPY";
+        case CPU::C6502::REL:  return "REL";
+        case CPU::C6502::ABS:  return "ABS";
+        case CPU::C6502::ABSX: return "ABX";
+        case CPU::C6502::ABSY: return "ABY";
+        case CPU::C6502::IND:  return "IND";
+        case CPU::C6502::INDX: return "INX";
+        case CPU::C6502::INDY: return "INY";
+    }
+
+    return "???";
+}
 
 auto buildPttrn(const std::array<u8, 128 * 128>& pixels) -> QImage {
     QImage img(128, 128, QImage::Format_ARGB32);
@@ -33,9 +55,9 @@ auto buildPttrn(const std::array<u8, 128 * 128>& pixels) -> QImage {
         qRgb(245, 245, 245)
     };
 
-    for (u8 y=0; y<128; ++y) {
+    for (u8 y=0; y < 128; ++y) {
         auto* row = reinterpret_cast<QRgb*>(img.scanLine(y));
-        for (u8 x=0; x<128; ++x) {
+        for (u8 x=0; x < 128; ++x) {
             const u8 idx = pixels[y * 128 + x] & 0x03;
             row[x] = colors[idx];
         }
@@ -43,17 +65,18 @@ auto buildPttrn(const std::array<u8, 128 * 128>& pixels) -> QImage {
 
     return img;
 }
+}
 
 
 WMain::WMain(const QString& romPath, QWidget* parent)
-    : QMainWindow(parent),
-      ui(std::make_unique<Ui::MainWindow>())
-{
+    : QMainWindow(parent)
+    , ui(std::make_unique<Ui::MainWindow>()) {
     ui->setupUi(this);
     setFocusPolicy(Qt::StrongFocus);
 
     stpDockWidgets();
     stpMenuActions();
+    applyRegion(Region::NTSC);
     stpTimer();
 
     fpsTimer.start();
@@ -62,83 +85,75 @@ WMain::WMain(const QString& romPath, QWidget* parent)
     if (!romPath.isEmpty())
         loadRom(romPath);
 }
+
 WMain::~WMain() = default;
 
 void WMain::clearCore() {
     cpu.reset();
+    apu.reset();
+    audio.reset();
     mem.reset();
     ppu.reset();
     mapper.reset();
-    apu.reset();
-
-    audio.reset();
 
     joyState = 0;
-    romLoaded = false; 
-    paused = false;
+    ppuCyclesDebt = 0.0;
+    romLoaded = 0;
+    paused = 0;
 }
 
-
-/* Контроллер NES */
-u8 WMain::joyMaskForKey(u32 key) {
+u8 WMain::joyMaskKey(u32 key) {
     switch (key) {
-        case Qt::Key_D: return 0x80;     /* Right  */
-        case Qt::Key_A: return 0x40;     /* Left   */
-        case Qt::Key_S: return 0x20;     /* Down   */
-        case Qt::Key_W: return 0x10;     /* Up     */
+        case Qt::Key_D: return 0x80;
+        case Qt::Key_A: return 0x40;
+        case Qt::Key_S: return 0x20;
+        case Qt::Key_W: return 0x10;
         case Qt::Key_Enter:
-        case Qt::Key_C: return 0x08;     /* Start  */
-        case Qt::Key_Shift: return 0x04; /* Select */
-        case Qt::Key_X: return 0x02;     /* B      */
-        case Qt::Key_Z: return 0x01;     /* A      */
+        case Qt::Key_C: return 0x08;
+        case Qt::Key_Shift: return 0x04;
+        case Qt::Key_X: return 0x02;
+        case Qt::Key_Z: return 0x01;
         default: return 0;
     }
 }
 
-
-/* GUI */
 void WMain::stpDockWidgets() {
     removeDockWidget(ui->dockCPU);
-    removeDockWidget(ui->dockAPU);
     removeDockWidget(ui->dockPPU);
 
-    addDockWidget(Qt::LeftDockWidgetArea, ui->dockAPU);
     addDockWidget(Qt::RightDockWidgetArea, ui->dockCPU);
     addDockWidget(Qt::RightDockWidgetArea, ui->dockPPU);
     splitDockWidget(ui->dockCPU, ui->dockPPU, Qt::Vertical);
 
-    ui->dockAPU->hide();
     ui->dockCPU->hide();
     ui->dockPPU->hide();
 
-    ui->actionAPU->setChecked(false);
-    ui->actionCPU->setChecked(false);
-    ui->actionPPU->setChecked(false);
+    ui->actionCPU->setChecked(0);
+    ui->actionPPU->setChecked(0);
 
-    connect(ui->actionAPU, &QAction::toggled, ui->dockAPU, &QDockWidget::setVisible);
     connect(ui->actionCPU, &QAction::toggled, ui->dockCPU, &QDockWidget::setVisible);
     connect(ui->actionPPU, &QAction::toggled, ui->dockPPU, &QDockWidget::setVisible);
 
-    connect(ui->dockAPU, &QDockWidget::visibilityChanged, ui->actionAPU, &QAction::setChecked);
     connect(ui->dockCPU, &QDockWidget::visibilityChanged, ui->actionCPU, &QAction::setChecked);
     connect(ui->dockPPU, &QDockWidget::visibilityChanged, ui->actionPPU, &QAction::setChecked);
 
     const QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    ui->apuDebugText->setFont(mono);
     ui->cpuDebugText->setFont(mono);
     ui->ppuDebugText->setFont(mono);
 
-    auto Preview = [](QLabel* label) {
+    auto preview = [](QLabel* label) {
         label->setAlignment(Qt::AlignCenter);
         label->setMinimumSize(150, 150);
         label->setStyleSheet("background-color: #111; border: 1px solid #444;");
     };
 
-    pttrnRow = new QHBoxLayout();
-    ppuPttrn0 = new QLabel(ui->dockPPUContents);
-    ppuPttrn1 = new QLabel(ui->dockPPUContents);
-    Preview(ppuPttrn0);
-    Preview(ppuPttrn1);
+    auto *pttrnRow = new QHBoxLayout(ui->dockPPUContents);
+    auto *ppuPttrn0 = new QLabel(ui->dockPPUContents);
+    auto *ppuPttrn1 = new QLabel(ui->dockPPUContents);
+    ppuPttrn0->setObjectName("ppuPattern0Label");
+    ppuPttrn1->setObjectName("ppuPattern1Label");
+    preview(ppuPttrn0);
+    preview(ppuPttrn1);
 
     pttrnRow->addWidget(ppuPttrn0);
     pttrnRow->addWidget(ppuPttrn1);
@@ -147,6 +162,21 @@ void WMain::stpDockWidgets() {
 
 void WMain::stpMenuActions() {
     connect(ui->actionExit, &QAction::triggered, this, &QWidget::close);
+
+    auto* regionGroup = new QActionGroup(this);
+    regionGroup->setExclusive(true);
+    regionGroup->addAction(ui->actionRegion_NTSC);
+    regionGroup->addAction(ui->actionRegion_PAL);
+
+    connect(ui->actionRegion_NTSC, &QAction::toggled, this, [this](bool checked) {
+        if (checked)
+            applyRegion(Region::NTSC);
+    });
+
+    connect(ui->actionRegion_PAL, &QAction::toggled, this, [this](bool checked) {
+        if (checked)
+            applyRegion(Region::PAL);
+    });
 
     connect(ui->actionOpen_ROM, &QAction::triggered, this, [this]() {
         const QString path = QFileDialog::getOpenFileName(
@@ -161,7 +191,8 @@ void WMain::stpMenuActions() {
     });
 
     connect(ui->actionLoad, &QAction::triggered, this, [this]() {
-        if (!romLoaded) return;
+        if (!romLoaded || !cpu || !ppu || !apu || !mem || !mapper)
+            return;
 
         const QString path = QFileDialog::getOpenFileName(
             this,
@@ -170,46 +201,51 @@ void WMain::stpMenuActions() {
             tr("NES State (*.nst);;All files (*.*)")
         );
 
-        if (!path.isEmpty()) {
-            Cpu::State cpuState;
-            Ppu::State ppuState;
-            Memory::State memState;
-            Mapper::State mpState;
-            Apu::State apuState;
-            if (loadBinState(path, cpuState, ppuState, memState, mpState, apuState)) {
-                if (!currRomPath.isEmpty())
-                    mapper.get()->loadNES(currRomPath.toStdString());
+        if (path.isEmpty()) return;
 
-                if(mapper->mapperNumber != mpState.mapperNumber) {
-                    QMessageBox::warning(
-                        this, 
-                        tr("Load State"), 
-                        tr("Mapper number mismatch. State file was created with a different mapper.")
-                    );
-                    return;
-                }
+        CPU::State cpuState{};
+        PPU::State ppuState{};
+        APU::State apuState{};
+        Memory::State memState{};
+        Mapper::State mapperState{};
+        u8 regionState = 0;
 
-                mapper->loadState(mpState);
-                cpu->loadState(cpuState);
-                ppu->loadState(ppuState);
-                mem->loadState(memState);
-                apu->loadState(apuState);
-
-                doFrame();
-                paused = true; 
-                ui->actionPause->setChecked(true);
-                updWindowTitle();
-            } else
-                QMessageBox::warning(
-                    this, 
-                    tr("Load State"), 
-                    tr("Failed to load state from file.")
-                );
+        if (!loadBinState(path, cpuState, ppuState, apuState, memState, mapperState, regionState)) {
+            QMessageBox::warning(this, tr("Load State"), tr("Failed to load state from file."));
+            return;
         }
+
+        if (!currRomPath.isEmpty())
+            mapper->loadNES(currRomPath.toStdWString());
+
+        if (mapper->mapperNumber != mapperState.mapperNumber) {
+            QMessageBox::warning(
+                this,
+                tr("Load State"),
+                tr("Mapper number mismatch. State file was created with a different mapper.")
+            );
+            return;
+        }
+
+        mapper->loadState(mapperState);
+        cpu->loadState(cpuState);
+        ppu->loadState(ppuState);
+        apu->loadState(apuState);
+        mem->loadState(memState);
+
+        applyRegion(regionState == 1 ? Region::PAL : Region::NTSC);
+        if (audio)
+            audio->reset();
+
+        doFrame();
+        paused = true;
+        ui->actionPause->setChecked(true);
+        updWindowTitle();
     });
 
     connect(ui->actionSave, &QAction::triggered, this, [this]() {
-        if (!romLoaded) return;
+        if (!romLoaded || !cpu || !ppu || !apu || !mem || !mapper)
+            return;
 
         const QString path = QFileDialog::getSaveFileName(
             this,
@@ -218,20 +254,17 @@ void WMain::stpMenuActions() {
             tr("NES State (*.nst);;All files (*.*)")
         );
 
-        if (!path.isEmpty()) {
-            if (!saveBinState(path, 
-                              cpu->getState(), 
-                              ppu->getState(), 
-                              mem->getState(),
-                              mapper->getState(),
-                              apu->getState()))
-            {
-                QMessageBox::warning(
-                    this, 
-                    tr("Save State"), 
-                    tr("Failed to save state to file.")
-                );
-            }
+        if (path.isEmpty())
+            return;
+
+        if (!saveBinState(path,
+                          cpu->getState(),
+                          ppu->getState(),
+                          apu->getState(),
+                          mem->getState(),
+                          mapper->getState(),
+                          static_cast<u8>(emuRegion == Region::PAL ? 1 : 0))) {
+            QMessageBox::warning(this, tr("Save State"), tr("Failed to save state to file."));
         }
     });
 
@@ -257,19 +290,18 @@ void WMain::stpMenuActions() {
     });
 }
 
-
-/* Эмуляция */
 void WMain::stpTimer() {
     frameTimer.setTimerType(Qt::PreciseTimer);
     frameTimer.setInterval(16);
 
     connect(&frameTimer, &QTimer::timeout, this, [this]() {
-        if (!romLoaded || paused) return;
+        if (!romLoaded || paused)
+            return;
 
         doFrame();
         updFpsCounter();
 
-        if (ui->actionAPU->isChecked() || ui->actionCPU->isChecked() || ui->actionPPU->isChecked())
+        if (ui->actionCPU->isChecked() || ui->actionPPU->isChecked())
             updDebugPanels();
     });
 
@@ -279,6 +311,7 @@ void WMain::stpTimer() {
 void WMain::loadRom(const QString& romPath) {
     try {
         clearCore();
+
         mapper = std::make_unique<Mapper>();
         mapper->loadNES(romPath.toStdWString());
 
@@ -296,27 +329,34 @@ void WMain::loadRom(const QString& romPath) {
             }
         }
 
-        if (mapperDir.empty()) mapper->load();
-        else mapper->load(mapperDir);
+        if (mapperDir.empty())
+            mapper->load();
+        else
+            mapper->load(mapperDir);
 
-        ppu = std::make_unique<Ppu>();
-        ppu->setMapper(mapper.get());
-
-        apu = std::make_unique<Apu>();
+        ppu = std::make_unique<PPU>(mapper.get());
+        ppu->setVideoMode((emuRegion == Region::PAL) ? PPU::VideoMode::PAL : PPU::VideoMode::NTSC);
+        apu = std::make_unique<APU>();
+        apu->powerUp();
+        apu->cyclesPerSample = (emuRegion == Region::PAL) ? PAL_CYCLES : NTSC_CYCLES;
+        audio = std::make_unique<NesAudio>();
+        audio->reset();
 
         mem = std::make_unique<Memory>(mapper.get(), ppu.get(), apu.get());
-        cpu = std::make_unique<Cpu>(mem.get());
-        cpu->powerUp();
+        cpu = std::make_unique<CPU>(mem.get());
+        cpu->reset();
+        ppuCyclesDebt = 0.0;
 
-        audio.reset();
+        for (u32 i=0; i < 3 * 262 * 341; ++i)
+            ppu->r.step();
+
 
         currRomPath = romPath;
-        romLoaded = true;
-        paused = false;
+        romLoaded = 1;
+        paused = 0;
         joyState = 0;
 
-        ui->actionPause->setChecked(false);
-        ui->apuDebugText->clear();
+        ui->actionPause->setChecked(0);
         ui->cpuDebugText->clear();
         ui->ppuDebugText->clear();
 
@@ -327,11 +367,10 @@ void WMain::loadRom(const QString& romPath) {
         updWindowTitle();
     } catch (const std::exception& e) {
         clearCore();
-        romLoaded = false;
-        paused = false;
+        romLoaded = 0;
+        paused = 0;
 
         ui->nesScreen->clear();
-        ui->apuDebugText->clear();
         ui->cpuDebugText->clear();
         ui->ppuDebugText->clear();
         updWindowTitle();
@@ -345,161 +384,103 @@ void WMain::loadRom(const QString& romPath) {
 }
 
 void WMain::doFrame() {
-    if (!mapper || !ppu || !mem || !cpu || !apu) return;
+    if (!mapper || !ppu || !apu || !mem || !cpu)
+        return;
 
     mem->setJoy1(joyState);
 
-    bool frameCompleted = false;
-    while (!frameCompleted) {
+    ppu->r.frameReady = 0;
+    const double ppuPerCpuRatio = ppuPerCpu();
+    while (!ppu->r.frameReady) {
         cpu->exec();
 
-        const u32 cycles = cpu->getCycles();
-        apu->step(cycles);
-
-        const u32 ppuSteps = cycles * 3;
-        for (u32 i=0; i<ppuSteps; ++i) {
-            ppu->step();
-
-            if (ppu->frameReady) {
-                ppu->frameReady = false;
-                frameCompleted = true;
-            }
+        u32 cycles = cpu->c.op_cycles;
+        if (cycles == 0) {
+            cycles = 1;
         }
 
-        if (ppu->nmiPending()) {
-            cpu->getState().do_nmi = true;
-            ppu->clearNmi();
+        ppuCyclesDebt += static_cast<double>(cycles) * ppuPerCpuRatio;
+        while (ppuCyclesDebt >= 1.0) {
+            ppu->r.step();
+            ppuCyclesDebt -= 1.0;
         }
 
         if (mapper->irqFlag)
-           cpu->getState().do_irq = true;
+            cpu->c.do_irq = 1;
+
+        if (apu->getState().frameIrq || apu->getState().dmc.irqFlag)
+            cpu->c.do_irq = 1;
+
+        if (ppu->r.nmiPending()) {
+            cpu->c.do_nmi = 1;
+            ppu->r.clearNmi();
+        }
+
+        apu->step(cycles);
     }
 
-    ui->nesScreen->setFrameBuffer(ppu->getFrame());
-    audio.pushSamples(apu->takeSamples());
+    if (audio && !apu->samples.empty()) {
+        audio->pushSamples(apu->samples);
+        apu->samples.clear();
+    }
+
+    ui->nesScreen->setFrameBuffer(ppu->frame);
+}
+
+void WMain::applyRegion(Region region) {
+    emuRegion = region;
+    ppuCyclesDebt = 0.0;
+
+    if (ui) {
+        ui->actionRegion_PAL->setChecked(emuRegion == Region::PAL);
+        ui->actionRegion_NTSC->setChecked(emuRegion == Region::NTSC);
+    }
+
+    if (ppu)
+        ppu->setVideoMode((emuRegion == Region::PAL) ? PPU::VideoMode::PAL 
+                                                     : PPU::VideoMode::NTSC);
+
+    if (apu)
+        apu->cyclesPerSample = (emuRegion == Region::PAL) ? PAL_CYCLES : NTSC_CYCLES;
+
+    if (emuRegion == Region::PAL)
+        frameTimer.setInterval(20);
+    else
+        frameTimer.setInterval(16);
+}
+
+double WMain::ppuPerCpu() const {
+    if (emuRegion == Region::PAL)
+        return 3.2;
+
+    return 3.0;
 }
 
 void WMain::updDebugPanels() {
-    if (!cpu || !ppu || !apu) return;
-
-    if (ui->actionAPU->isChecked()) {
-        const auto& s = apu->getState();
-        ui->apuDebugText->setPlainText(QString(
-            "FRAME\n"
-            "cycle:  %1\n"
-            "odd:    %2\n"
-            "mode5:  %3\n"
-            "irqInh: %4\n"
-            "frameIrq:%5\n"
-            "\n"
-            "PULSE 1\n"
-            "en:%6  len:%7\n"
-            "tim:%8 seq:%9\n"
-            "duty:%10 env:%11\n"
-            "vol:%12\n"
-            "\n"
-            "PULSE 2\n"
-            "en:%13 len:%14\n"
-            "tim:%15 seq:%16\n"
-            "duty:%17 env:%18\n"
-            "vol:%19\n"
-            "\n"
-            "TRIANGLE\n"
-            "en:%20 len:%21\n"
-            "lin:%22 reload:%23\n"
-            "tim:%24 seq:%25\n"
-            "\n"
-            "NOISE\n"
-            "en:%26 len:%27\n"
-            "per:%28 tim:%29\n"
-            "mode:%30 sh:%31\n"
-            "env:%32 vol:%33\n"
-            "\n"
-            "DMC\n"
-            "en:%34 act:%35\n"
-            "irqEn:%36 loop:%37 irq:%38\n"
-            "rate:%39 timer:%40\n"
-            "out:%41 bits:%42\n"
-            "bytes:%43 empty:%44\n"
-            "addr:0x%45 len:0x%46\n"
-            "samp:0x%47 sh:0x%48"
-        )
-        .arg(s.frameCycle)
-        .arg(s.oddCycle ? 1 : 0)
-        .arg(s.frameCntMode5 ? 1 : 0)
-        .arg(s.irqInhibit ? 1 : 0)
-        .arg(s.frameIrq ? 1 : 0)
-        .arg(s.pulse1.enabled ? 1 : 0)
-        .arg(s.pulse1.lenCnt)
-        .arg(s.pulse1.timerPeriod)
-        .arg(s.pulse1.seqPos)
-        .arg(s.pulse1.duty)
-        .arg(s.pulse1.envelDecay)
-        .arg(s.pulse1.constVol ? s.pulse1.volPeriod : s.pulse1.envelDecay)
-        .arg(s.pulse2.enabled ? 1 : 0)
-        .arg(s.pulse2.lenCnt)
-        .arg(s.pulse2.timerPeriod)
-        .arg(s.pulse2.seqPos)
-        .arg(s.pulse2.duty)
-        .arg(s.pulse2.envelDecay)
-        .arg(s.pulse2.constVol ? s.pulse2.volPeriod : s.pulse2.envelDecay)
-        .arg(s.triangle.enabled ? 1 : 0)
-        .arg(s.triangle.lenCnt)
-        .arg(s.triangle.linearCnt)
-        .arg(s.triangle.linearReloadFlag ? 1 : 0)
-        .arg(s.triangle.timerPeriod)
-        .arg(s.triangle.seqPos)
-        .arg(s.noise.enabled ? 1 : 0)
-        .arg(s.noise.lenCnt)
-        .arg(s.noise.periodIndex)
-        .arg(s.noise.timer)
-        .arg(s.noise.mode ? 1 : 0)
-        .arg(s.noise.shiftReg, 4, 16, QChar('0'))
-        .arg(s.noise.envelDecay)
-        .arg(s.noise.constVol ? s.noise.volPeriod : s.noise.envelDecay)
-        .arg(s.dmc.enabled ? 1 : 0)
-        .arg(s.dmc.active ? 1 : 0)
-        .arg(s.dmc.irqEnabled ? 1 : 0)
-        .arg(s.dmc.loop ? 1 : 0)
-        .arg(s.dmc.irqFlag ? 1 : 0)
-        .arg(s.dmc.rateIndex)
-        .arg(s.dmc.timer)
-        .arg(s.dmc.outLevel)
-        .arg(s.dmc.bitsRemain)
-        .arg(s.dmc.bytesRemain)
-        .arg(s.dmc.bufferEmpty ? 1 : 0)
-        .arg(s.dmc.sampleAddrReg, 2, 16, QChar('0'))
-        .arg(s.dmc.sampleLenReg, 2, 16, QChar('0'))
-        .arg(s.dmc.sampleBuffer, 2, 16, QChar('0'))
-        .arg(s.dmc.shiftReg, 2, 16, QChar('0'))
-        );
-    }
+    if (!cpu || !ppu) return;
 
     if (ui->actionCPU->isChecked()) {
-        const auto& state = cpu->getState();
+        const auto& regs = cpu->c.regs;
+        const QString opName = QString::fromStdString(cpu->getLastOpName());
+        const QString amName = QString::fromLatin1(toAddrModeString(cpu->getLastAddrMode()));
         ui->cpuDebugText->setPlainText(QString(
-            "OP: %1      AM:   %10\n"
-            "A:  0x%2     Addr: 0x%11\n"
-            "X:  0x%3\n"
-            "Y:  0x%4         NV1BDIZC\n"
-            "SP: 0x%6     P:  %5\n"
-            "PC: 0x%7\n"
-            "\n"
-            "Cycles (last):  %8\n"
-            "Cycles (total): %9"
+            "OP: %1   AM: %2\n"
+            "A:  0x%3\n"
+            "X:  0x%4\n"
+            "Y:  0x%5\n"
+            "P:  %6\n"
+            "SP: 0x%7\n"
+            "PC: 0x%8\n"
+            "Cycles (last): %9"
         )
-        .arg(QString::fromStdString(state.dbg.op), 3)
-        .arg(state.regs.A, 2, 16, QChar('0'))
-        .arg(state.regs.X, 2, 16, QChar('0'))
-        .arg(state.regs.Y, 2, 16, QChar('0'))
-        .arg(state.regs.P, 8, 2, QChar('0'))
-        .arg(state.regs.SP, 2, 16, QChar('0'))
-        .arg(state.regs.PC, 4, 16, QChar('0'))
-        .arg(cpu->getCycles())
-        .arg(cpu->getTotalCycles())
-        .arg(QString::fromStdString(state.dbg.am), 3)
-        .arg(state.dbg.addr, 4, 16, QChar('0'))
-        );
+        .arg(opName, amName)
+        .arg(regs.A, 2, 16, QChar('0'))
+        .arg(regs.X, 2, 16, QChar('0'))
+        .arg(regs.Y, 2, 16, QChar('0'))
+        .arg(regs.P, 8, 2, QChar('0'))
+        .arg(regs.SP, 2, 16, QChar('0'))
+        .arg(regs.PC, 4, 16, QChar('0'))
+        .arg(cpu->c.op_cycles));
     }
 
     if (ui->actionPPU->isChecked()) {
@@ -517,18 +498,18 @@ void WMain::updDebugPanels() {
         .arg(state.v, 4, 16, QChar('0'))
         .arg(state.t, 4, 16, QChar('0'))
         .arg(state.fineX)
-        .arg(state.w)
-        );
+        .arg(state.w));
 
-        const QImage pt0 = buildPttrn(ppu->getPttrnTable(0));
-        const QImage pt1 = buildPttrn(ppu->getPttrnTable(1));
+        const QImage pt0 = buildPttrn(ppu->r.getPttrnTable(0));
+        const QImage pt1 = buildPttrn(ppu->r.getPttrnTable(1));
 
-        if (ppuPttrn0) {
+        if (auto* ppuPttrn0 = ui->dockPPUContents->findChild<QLabel*>("ppuPattern0Label")) {
             ppuPttrn0->setPixmap(QPixmap::fromImage(
                 pt0.scaled(ppuPttrn0->size(), Qt::KeepAspectRatio, Qt::FastTransformation)
             ));
         }
-        if (ppuPttrn1) {
+
+        if (auto* ppuPttrn1 = ui->dockPPUContents->findChild<QLabel*>("ppuPattern1Label")) {
             ppuPttrn1->setPixmap(QPixmap::fromImage(
                 pt1.scaled(ppuPttrn1->size(), Qt::KeepAspectRatio, Qt::FastTransformation)
             ));
@@ -550,8 +531,6 @@ void WMain::updFpsCounter() {
         updWindowTitle();
 }
 
-
-/* Окно */
 void WMain::updWindowTitle() {
     QString title = QStringLiteral("NES.cpp");
 
@@ -567,14 +546,13 @@ void WMain::updWindowTitle() {
     setWindowTitle(title);
 }
 
-
 void WMain::keyPressEvent(QKeyEvent* event) {
     if (event->isAutoRepeat()) {
         event->ignore();
         return;
     }
 
-    if (const u8 mask = joyMaskForKey(event->key()); mask != 0) {
+    if (const u8 mask = joyMaskKey(event->key()); mask != 0) {
         joyState |= mask;
         event->accept();
         return;
@@ -589,7 +567,7 @@ void WMain::keyReleaseEvent(QKeyEvent* event) {
         return;
     }
 
-    if (const u8 mask = joyMaskForKey(event->key()); mask != 0) {
+    if (const u8 mask = joyMaskKey(event->key()); mask != 0) {
         joyState &= static_cast<u8>(~mask);
         event->accept();
         return;

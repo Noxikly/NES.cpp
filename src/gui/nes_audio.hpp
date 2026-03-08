@@ -6,6 +6,9 @@
 #include <memory>
 #include <vector>
 
+inline constexpr qsizetype maxBytes = 4096 * 4;
+inline const qsizetype maxFrames = maxBytes / static_cast<qsizetype>(sizeof(qint16) * 2);
+
 class QAudioSink;
 class QIODevice;
 

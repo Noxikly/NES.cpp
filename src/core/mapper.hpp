@@ -1,14 +1,17 @@
 #pragma once
 
+#include <vector>
 #include <string>
 #include <filesystem>
 
 #include "lua.hpp"
+#include "common.hpp"
 
 
 class Mapper : public Lua {
 public:
     Mapper() = default;
+    ~Mapper() = default;
 
     void load(const std::filesystem::path& srcPath = "mappers/") {
         std::filesystem::path path = srcPath / ("mp" + std::to_string(mapperNumber) + ".lua");
@@ -53,7 +56,7 @@ public:
     struct State {
         u8 mapperNumber{0};
         u8 mirrorMode{0};
-        bool irqFlag{false};
+        bool irqFlag{0};
         std::vector<u8> prgRam;
         std::vector<u8> chrRam;
         std::vector<u8> mapperBlob;
@@ -62,7 +65,7 @@ public:
     auto getState() -> State {
         State s;
         s.mapperNumber = mapperNumber;
-        s.mirrorMode = mirrorMode;
+        s.mirrorMode = static_cast<u8>(mirror);
         s.irqFlag = irqFlag;
         s.prgRam = PRG_RAM;
         if (chrRam)
@@ -74,7 +77,7 @@ public:
 
     void loadState(const State& state) {
         mapperNumber = state.mapperNumber;
-        mirrorMode = state.mirrorMode;
+        mirror = static_cast<Cartridge::MirrorMode>(state.mirrorMode);
         irqFlag = state.irqFlag;
         if (!state.prgRam.empty())
             PRG_RAM = state.prgRam;
@@ -85,4 +88,3 @@ public:
     }
 
 };
-

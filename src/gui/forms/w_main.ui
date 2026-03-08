@@ -176,40 +176,6 @@
     </layout>
    </widget>
   </widget>
-  <widget class="QDockWidget" name="dockAPU">
-   <property name="features">
-    <set>QDockWidget::DockWidgetFeature::DockWidgetClosable|QDockWidget::DockWidgetFeature::DockWidgetMovable</set>
-   </property>
-   <property name="allowedAreas">
-    <set>Qt::DockWidgetArea::LeftDockWidgetArea|Qt::DockWidgetArea::RightDockWidgetArea</set>
-   </property>
-   <property name="windowTitle">
-    <string>Debug APU</string>
-   </property>
-   <attribute name="dockWidgetArea">
-    <number>1</number>
-   </attribute>
-   <widget class="QWidget" name="dockAPUContents">
-    <layout class="QVBoxLayout" name="verticalLayoutAPU">
-     <item>
-      <widget class="QPlainTextEdit" name="apuDebugText">
-       <property name="font">
-        <font>
-         <family>Consolas</family>
-         <pointsize>10</pointsize>
-        </font>
-       </property>
-       <property name="lineWrapMode">
-        <enum>QPlainTextEdit::LineWrapMode::NoWrap</enum>
-       </property>
-       <property name="readOnly">
-        <bool>true</bool>
-       </property>
-      </widget>
-     </item>
-    </layout>
-   </widget>
-  </widget>
   <widget class="QDockWidget" name="dockPPU">
    <property name="features">
     <set>QDockWidget::DockWidgetFeature::DockWidgetClosable|QDockWidget::DockWidgetFeature::DockWidgetMovable</set>
@@ -257,22 +223,30 @@
     <addaction name="actionOpen_ROM"/>
     <addaction name="actionExit"/>
    </widget>
-   <widget class="QMenu" name="menuEmulation">
-    <property name="title">
-     <string>Emulation</string>
-    </property>
-    <widget class="QMenu" name="menuState">
+    <widget class="QMenu" name="menuEmulation">
      <property name="title">
-      <string>State</string>
+      <string>Emulation</string>
      </property>
-     <addaction name="actionLoad"/>
-     <addaction name="actionSave"/>
+     <widget class="QMenu" name="menuRegion">
+      <property name="title">
+       <string>Region</string>
+      </property>
+      <addaction name="actionRegion_NTSC"/>
+      <addaction name="actionRegion_PAL"/>
+     </widget>
+     <widget class="QMenu" name="menuState">
+      <property name="title">
+       <string>State</string>
+      </property>
+      <addaction name="actionLoad"/>
+      <addaction name="actionSave"/>
+     </widget>
+     <addaction name="menuRegion"/>
+     <addaction name="menuState"/>
+     <addaction name="actionPause"/>
+     <addaction name="actionReset"/>
+     <addaction name="actionReload"/>
     </widget>
-    <addaction name="menuState"/>
-    <addaction name="actionPause"/>
-    <addaction name="actionReset"/>
-    <addaction name="actionReload"/>
-   </widget>
    <widget class="QMenu" name="menuVideo">
     <property name="title">
      <string>Video</string>
@@ -283,7 +257,6 @@
     <property name="title">
      <string>Debug</string>
     </property>
-    <addaction name="actionAPU"/>
     <addaction name="actionCPU"/>
     <addaction name="actionPPU"/>
    </widget>
@@ -366,14 +339,6 @@
     <string>CPU</string>
    </property>
   </action>
-  <action name="actionAPU">
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>APU</string>
-   </property>
-  </action>
   <action name="actionPPU">
    <property name="checkable">
     <bool>true</bool>
@@ -396,6 +361,25 @@
    </property>
    <property name="text">
     <string>Save</string>
+   </property>
+  </action>
+  <action name="actionRegion_NTSC">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="checked">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>NTSC</string>
+   </property>
+  </action>
+  <action name="actionRegion_PAL">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>PAL</string>
    </property>
   </action>
  </widget>

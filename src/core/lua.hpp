@@ -2,6 +2,7 @@
 
 extern "C" 
 {
+    #include <luajit-2.1/lua.h>
     #include <luajit-2.1/luajit.h>
     #include <luajit-2.1/lualib.h>
     #include <luajit-2.1/lauxlib.h>
@@ -14,6 +15,7 @@ extern "C"
 #include <vector>
 
 #include "cartridge.hpp"
+#include "common.hpp"
 
 
 class Lua : public Cartridge {
@@ -80,9 +82,7 @@ public:
             lua_pushvalue(L, -2);
             if (lua_pcall(L, 1, 0, 0) != LUA_OK)
                 throw std::runtime_error("[LUA]: " + luaError());
-        } else {
-            lua_pop(L, 1);
-        }
+        } else lua_pop(L, 1);
 
         /* Кэшируем функции */
         cacheFunc("readPRGAddr");

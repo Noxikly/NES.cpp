@@ -1,20 +1,21 @@
 #include "nes_audio.hpp"
-#include "constants.hpp"
+#include "core/common.hpp"
 
-#include <QAudioDevice>
 #include <QAudioFormat>
 #include <QAudioSink>
 #include <QMediaDevices>
 #include <QIODevice>
 
+#include <algorithm>
+#include <cstring>
+
 NesAudio::NesAudio() {
     QAudioFormat format;
-    format.setSampleRate(SAMPLE_RATE);
-    format.setChannelCount(CHANNELS);
+    format.setSampleRate(static_cast<int>(AUDIO_SAMPLE_RATE));
+    format.setChannelCount(AUDIO_CHANNELS);
     format.setSampleFormat(QAudioFormat::Int16);
 
-    const QAudioDevice dev = QMediaDevices::defaultAudioOutput();
-    sink = std::make_unique<QAudioSink>(dev, format);
+    sink = std::make_unique<QAudioSink>(QMediaDevices::defaultAudioOutput(), format);
     sink->setBufferSize(2048 * 4);
 
     io = sink->start();
@@ -36,19 +37,23 @@ void NesAudio::reset() {
 void NesAudio::pushSamples(const std::vector<float>& samples) {
     if (!sink || !io || samples.empty()) return;
 
-    QByteArray incoming;
-    incoming.resize(static_cast<qsizetype>(samples.size()* sizeof(qint16) * 2));
+    const qsizetype totalFrames = static_cast<qsizetype>(samples.size());
+    const qsizetype kFrames = std::min(totalFrames, maxFrames);
+    const qsizetype startFrame = totalFrames - kFrames;
 
-    for (qsizetype i = 0; i < static_cast<qsizetype>(samples.size()); ++i) {
-        const qint16 pcm = toI16(samples[static_cast<std::size_t>(i)]);
-        /* Stereo: L, R */
-        std::memcpy(incoming.data() + (i * 2 + 0) * static_cast<qsizetype>(sizeof(qint16)), &pcm, sizeof(qint16));
-        std::memcpy(incoming.data() + (i * 2 + 1) * static_cast<qsizetype>(sizeof(qint16)), &pcm, sizeof(qint16));
+    QByteArray in;
+    in.resize(kFrames * static_cast<qsizetype>(sizeof(qint16) * 2));
+
+    auto* out = reinterpret_cast<qint16*>(in.data());
+
+    for (qsizetype i=0; i < kFrames; ++i) {
+        const qint16 pcm = toI16(samples[static_cast<std::size_t>(startFrame + i)]);
+        out[i * 2 + 0] = pcm;
+        out[i * 2 + 1] = pcm;
     }
 
-    pcmBuffer.append(incoming);
+    pcmBuffer.append(in);
 
-    constexpr qsizetype maxBytes = 4096 * 4;
     if (pcmBuffer.size() > maxBytes)
         pcmBuffer.remove(0, pcmBuffer.size() - maxBytes);
 
