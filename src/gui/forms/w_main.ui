@@ -233,6 +233,7 @@
       </property>
       <addaction name="actionRegion_NTSC"/>
       <addaction name="actionRegion_PAL"/>
+      <addaction name="actionRegion_Dendy"/>
      </widget>
      <widget class="QMenu" name="menuState">
       <property name="title">
@@ -253,6 +254,12 @@
     </property>
     <addaction name="actionShow_FPS"/>
    </widget>
+   <widget class="QMenu" name="menuAudio">
+    <property name="title">
+     <string>Audio</string>
+    </property>
+    <addaction name="actionAudioEnable"/>
+   </widget>
    <widget class="QMenu" name="menuDebug">
     <property name="title">
      <string>Debug</string>
@@ -263,6 +270,7 @@
    <addaction name="menuFile"/>
    <addaction name="menuEmulation"/>
    <addaction name="menuVideo"/>
+   <addaction name="menuAudio"/>
    <addaction name="menuDebug"/>
   </widget>
   <action name="actionOpen_ROM">
@@ -331,6 +339,14 @@
     <string>Show FPS</string>
    </property>
   </action>
+  <action name="actionAudioEnable">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Enable</string>
+   </property>
+  </action>
   <action name="actionCPU">
    <property name="checkable">
     <bool>true</bool>
@@ -380,6 +396,14 @@
    </property>
    <property name="text">
     <string>PAL</string>
+   </property>
+  </action>
+  <action name="actionRegion_Dendy">
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+   <property name="text">
+    <string>Dendy</string>
    </property>
   </action>
  </widget>

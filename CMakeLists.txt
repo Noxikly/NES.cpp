@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 project(nespp
-        VERSION 0.3.0
+        VERSION 0.3.2
         DESCRIPTION "A simple NES emulator"
         HOMEPAGE_URL "https://github.com/Noxikly/NES.cpp"
         LANGUAGES CXX)

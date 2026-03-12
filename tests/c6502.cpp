@@ -1,14 +1,13 @@
 #include <gtest/gtest.h>
 #include <initializer_list>
 
-#include "../src/core/cpu.hpp"
 #include "../src/core/common.hpp"
-
+#include "../src/core/cpu.hpp"
 
 class CpuTest : public testing::Test {
-protected:
-    Memory mem;
-    CPU cpu{&mem};
+  protected:
+    Core::Memory mem;
+    Core::CPU cpu{&mem};
 
     void SetUp() override {
         cpu.reset();
@@ -21,7 +20,6 @@ protected:
             mem.write(addr++, byte);
     }
 };
-
 
 /* Хранение/Загрузка */
 TEST_F(CpuTest, LDA) {
@@ -62,7 +60,6 @@ TEST_F(CpuTest, STY) {
     cpu.exec();
     EXPECT_EQ(mem.read(0x0057), 0x08);
 }
-
 
 /* Передача */
 TEST_F(CpuTest, TAX) {
@@ -107,11 +104,10 @@ TEST_F(CpuTest, TXS) {
     EXPECT_EQ(cpu.c.regs.SP, 0xE4);
 }
 
-
 /* Арифметика */
 TEST_F(CpuTest, ADC) {
     cpu.c.regs.A = 0x10;
-    cpu.c.regs.P &= ~CPU::C6502::C;
+    cpu.c.regs.P &= ~Core::CPU::C6502::C;
     loadCode({0x69, 0x20});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.A, 0x30);
@@ -119,7 +115,7 @@ TEST_F(CpuTest, ADC) {
 
 TEST_F(CpuTest, SBC) {
     cpu.c.regs.A = 0x40;
-    cpu.c.regs.P |= CPU::C6502::C;
+    cpu.c.regs.P |= Core::CPU::C6502::C;
     loadCode({0xE9, 0x0F});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.A, 0x31);
@@ -137,7 +133,7 @@ TEST_F(CpuTest, DEC) {
     loadCode({0xC6, 0x60});
     cpu.exec();
     EXPECT_EQ(mem.read(0x0060), 0x00);
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::Z);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::Z);
 }
 
 TEST_F(CpuTest, INX) {
@@ -145,7 +141,7 @@ TEST_F(CpuTest, INX) {
     loadCode({0xE8});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.X, 0x00);
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::Z);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::Z);
 }
 
 TEST_F(CpuTest, DEX) {
@@ -153,7 +149,7 @@ TEST_F(CpuTest, DEX) {
     loadCode({0xCA});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.X, 0x00);
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::Z);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::Z);
 }
 
 TEST_F(CpuTest, INY) {
@@ -161,7 +157,7 @@ TEST_F(CpuTest, INY) {
     loadCode({0xC8});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.Y, 0x80);
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::N);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::N);
 }
 
 TEST_F(CpuTest, DEY) {
@@ -169,9 +165,8 @@ TEST_F(CpuTest, DEY) {
     loadCode({0x88});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.Y, 0xFF);
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::N);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::N);
 }
-
 
 /* Логические */
 TEST_F(CpuTest, AND) {
@@ -200,36 +195,34 @@ TEST_F(CpuTest, BIT) {
     mem.write(0x0030, 0xC0);
     loadCode({0x24, 0x30});
     cpu.exec();
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::N);
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::V);
-    EXPECT_FALSE(cpu.c.regs.P & CPU::C6502::Z);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::N);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::V);
+    EXPECT_FALSE(cpu.c.regs.P & Core::CPU::C6502::Z);
 }
-
 
 /* Сравнение */
 TEST_F(CpuTest, CMP) {
     cpu.c.regs.A = 0x50;
     loadCode({0xC9, 0x50});
     cpu.exec();
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::Z);
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::C);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::Z);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::C);
 }
 
 TEST_F(CpuTest, CPX) {
     cpu.c.regs.X = 0x40;
     loadCode({0xE0, 0x30});
     cpu.exec();
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::C);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::C);
 }
 
 TEST_F(CpuTest, CPY) {
     cpu.c.regs.Y = 0x7F;
     loadCode({0xC0, 0x80});
     cpu.exec();
-    EXPECT_FALSE(cpu.c.regs.P & CPU::C6502::C);
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::N);
+    EXPECT_FALSE(cpu.c.regs.P & Core::CPU::C6502::C);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::N);
 }
-
 
 /* Сдвиги */
 TEST_F(CpuTest, ASL) {
@@ -237,8 +230,8 @@ TEST_F(CpuTest, ASL) {
     loadCode({0x0A});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.A, 0x00);
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::C);
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::Z);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::C);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::Z);
 }
 
 TEST_F(CpuTest, LSR) {
@@ -246,7 +239,7 @@ TEST_F(CpuTest, LSR) {
     loadCode({0x4A});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.A, 0x00);
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::C);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::C);
 }
 
 TEST_F(CpuTest, ROL) {
@@ -254,66 +247,64 @@ TEST_F(CpuTest, ROL) {
     loadCode({0x2A});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.A, 0x10);
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::C);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::C);
 }
 
 TEST_F(CpuTest, ROR) {
-    cpu.c.regs.P |= CPU::C6502::C;
+    cpu.c.regs.P |= Core::CPU::C6502::C;
     cpu.c.regs.A = 0x02;
     loadCode({0x6A});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.A, 0x81);
-    EXPECT_FALSE(cpu.c.regs.P & CPU::C6502::C);
+    EXPECT_FALSE(cpu.c.regs.P & Core::CPU::C6502::C);
 }
-
 
 /* Флаги */
 TEST_F(CpuTest, CLC) {
-    cpu.c.regs.P |= CPU::C6502::C;
+    cpu.c.regs.P |= Core::CPU::C6502::C;
     loadCode({0x18});
     cpu.exec();
-    EXPECT_FALSE(cpu.c.regs.P & CPU::C6502::C);
+    EXPECT_FALSE(cpu.c.regs.P & Core::CPU::C6502::C);
 }
 
 TEST_F(CpuTest, SEC) {
     loadCode({0x38});
     cpu.exec();
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::C);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::C);
 }
 
 TEST_F(CpuTest, CLI) {
-    cpu.c.regs.P |= CPU::C6502::I;
+    cpu.c.regs.P |= Core::CPU::C6502::I;
     loadCode({0x58});
     cpu.exec();
-    EXPECT_FALSE(cpu.c.regs.P & CPU::C6502::I);
+    EXPECT_FALSE(cpu.c.regs.P & Core::CPU::C6502::I);
 }
 
 TEST_F(CpuTest, SEI) {
     loadCode({0x78});
     cpu.exec();
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::I);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::I);
 }
 
 TEST_F(CpuTest, CLD) {
-    cpu.c.regs.P |= CPU::C6502::D;
+    cpu.c.regs.P |= Core::CPU::C6502::D;
     loadCode({0xD8});
     cpu.exec();
-    EXPECT_FALSE(cpu.c.regs.P & CPU::C6502::D);
+    EXPECT_FALSE(cpu.c.regs.P & Core::CPU::C6502::D);
 }
 
 TEST_F(CpuTest, SED) {
     loadCode({0xF8});
     cpu.exec();
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::D);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::D);
 }
 
 TEST_F(CpuTest, CLV) {
-    cpu.c.regs.P |= CPU::C6502::V;
+    cpu.c.regs.P |= Core::CPU::C6502::V;
     loadCode({0xB8});
     cpu.exec();
-    EXPECT_FALSE(cpu.c.regs.P & CPU::C6502::V);
+    EXPECT_FALSE(cpu.c.regs.P & Core::CPU::C6502::V);
 }
-
 
 /* Стек */
 TEST_F(CpuTest, PHA) {
@@ -337,8 +328,9 @@ TEST_F(CpuTest, PHP) {
     cpu.c.regs.P = 0x30;
     loadCode({0x08});
     cpu.exec();
-    EXPECT_EQ(mem.read(static_cast<u16>(STACK + old_sp)), 
-                       static_cast<u8>(0x30 | CPU::C6502::U | CPU::C6502::B));
+    EXPECT_EQ(
+        mem.read(static_cast<u16>(STACK + old_sp)),
+        static_cast<u8>(0x30 | Core::CPU::C6502::U | Core::CPU::C6502::B));
 }
 
 TEST_F(CpuTest, PLP) {
@@ -347,9 +339,8 @@ TEST_F(CpuTest, PLP) {
     mem.write(static_cast<u16>(STACK + 0xFF), 0x70);
     loadCode({0x28});
     cpu.exec();
-    EXPECT_TRUE(cpu.c.regs.P & CPU::C6502::U);
+    EXPECT_TRUE(cpu.c.regs.P & Core::CPU::C6502::U);
 }
-
 
 /* Переходы */
 TEST_F(CpuTest, JMP) {
@@ -383,8 +374,8 @@ TEST_F(CpuTest, BRK) {
 
 TEST_F(CpuTest, RTI) {
     cpu.c.regs.SP = 0xFC;
-    mem.write(static_cast<u16>(STACK + 0xFD), 
-              static_cast<u8>(0x30 | CPU::C6502::U));
+    mem.write(static_cast<u16>(STACK + 0xFD),
+              static_cast<u8>(0x30 | Core::CPU::C6502::U));
     mem.write(static_cast<u16>(STACK + 0xFE), 0x03);
     mem.write(static_cast<u16>(STACK + 0xFF), 0x02);
     loadCode({0x40});
@@ -392,59 +383,58 @@ TEST_F(CpuTest, RTI) {
     EXPECT_EQ(cpu.c.regs.PC, 0x0203);
 }
 
-
 /* Ветвления */
 TEST_F(CpuTest, BEQ) {
-    cpu.c.regs.P |= CPU::C6502::Z;
+    cpu.c.regs.P |= Core::CPU::C6502::Z;
     loadCode({0xF0, 0x05});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.PC, 0x0207);
 }
 
 TEST_F(CpuTest, BNE) {
-    cpu.c.regs.P &= ~CPU::C6502::Z;
+    cpu.c.regs.P &= ~Core::CPU::C6502::Z;
     loadCode({0xD0, 0x05});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.PC, 0x0207);
 }
 
 TEST_F(CpuTest, BCC) {
-    cpu.c.regs.P &= ~CPU::C6502::C;
+    cpu.c.regs.P &= ~Core::CPU::C6502::C;
     loadCode({0x90, 0x03});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.PC, 0x0205);
 }
 
 TEST_F(CpuTest, BCS) {
-    cpu.c.regs.P |= CPU::C6502::C;
+    cpu.c.regs.P |= Core::CPU::C6502::C;
     loadCode({0xB0, 0x03});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.PC, 0x0205);
 }
 
 TEST_F(CpuTest, BMI) {
-    cpu.c.regs.P |= CPU::C6502::N;
+    cpu.c.regs.P |= Core::CPU::C6502::N;
     loadCode({0x30, 0x03});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.PC, 0x0205);
 }
 
 TEST_F(CpuTest, BPL) {
-    cpu.c.regs.P &= ~CPU::C6502::N;
+    cpu.c.regs.P &= ~Core::CPU::C6502::N;
     loadCode({0x10, 0x03});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.PC, 0x0205);
 }
 
 TEST_F(CpuTest, BVC) {
-    cpu.c.regs.P &= ~CPU::C6502::V;
+    cpu.c.regs.P &= ~Core::CPU::C6502::V;
     loadCode({0x50, 0x03});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.PC, 0x0205);
 }
 
 TEST_F(CpuTest, BVS) {
-    cpu.c.regs.P |= CPU::C6502::V;
+    cpu.c.regs.P |= Core::CPU::C6502::V;
     loadCode({0x70, 0x03});
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.PC, 0x0205);
@@ -457,7 +447,6 @@ TEST_F(CpuTest, NOP) {
     cpu.exec();
     EXPECT_EQ(cpu.c.regs.PC, static_cast<u16>(old_pc + 1));
 }
-
 
 TEST_F(CpuTest, MULTIPLY_TEST) {
     loadCode({
@@ -481,8 +470,7 @@ TEST_F(CpuTest, MULTIPLY_TEST) {
     EXPECT_EQ(mem.read(0x0002), 0x1E);
 }
 
-
-int main(int argc, char** argv) {
+int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

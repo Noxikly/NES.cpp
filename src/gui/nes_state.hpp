@@ -1,28 +1,24 @@
 #pragma once
- 
+
 #include <QFile>
 
-#include "core/cpu.hpp"
-#include "core/ppu.hpp"
 #include "core/apu.hpp"
-#include "core/mem.hpp"
+#include "core/cpu.hpp"
 #include "core/mapper.hpp"
+#include "core/mem.hpp"
+#include "core/ppu.hpp"
 
- 
-inline auto saveBinState(const QString& path, 
-                         const CPU::State& cpu, 
-                         const PPU::State& ppu,
-                         const APU::State& apu,
-                         const Memory::State& mem,
-                         const Mapper::State& mapper,
-                         u8 region) -> bool 
-{
+inline auto saveBinState(const QString &path, const Core::CPU::State &cpu,
+                         const Core::PPU::State &ppu,
+                         const Core::APU::State &apu,
+                         const Core::Memory::State &mem,
+                         const Core::Mapper::State &mapper, u8 region) -> bool {
     QFile file(path);
-    if (!file.open(QIODevice::WriteOnly)) return false;
+    if (!file.open(QIODevice::WriteOnly))
+        return false;
 
     QDataStream out(&file);
     out.setByteOrder(QDataStream::LittleEndian);
-
 
     /* Mapper */
     out << static_cast<u8>(mapper.mapperNumber)
@@ -30,59 +26,55 @@ inline auto saveBinState(const QString& path,
         << static_cast<u8>(mapper.irqFlag);
 
     out << static_cast<u32>(mapper.prgRam.size());
-    for (u8 b : mapper.prgRam) out << b;
+    for (u8 b : mapper.prgRam)
+        out << b;
 
     out << static_cast<u32>(mapper.chrRam.size());
-    for (u8 b : mapper.chrRam) out << b;
+    for (u8 b : mapper.chrRam)
+        out << b;
 
     out << static_cast<u32>(mapper.mapperBlob.size());
-    for (u8 b : mapper.mapperBlob) out << b;
+    for (u8 b : mapper.mapperBlob)
+        out << b;
 
     /* CPU */
-    out << static_cast<u8>(cpu.regs.A)
-        << static_cast<u8>(cpu.regs.X)
-        << static_cast<u8>(cpu.regs.Y)
-        << static_cast<u8>(cpu.regs.P)
-        << static_cast<u8>(cpu.regs.SP)
-        << static_cast<u16>(cpu.regs.PC)
-        << static_cast<u8>(cpu.do_nmi)
-        << static_cast<u8>(cpu.do_irq)
-        << static_cast<u32>(cpu.op_cycles)
-        << static_cast<u8>(cpu.page_crossed);
+    out << static_cast<u8>(cpu.regs.A) << static_cast<u8>(cpu.regs.X)
+        << static_cast<u8>(cpu.regs.Y) << static_cast<u8>(cpu.regs.P)
+        << static_cast<u8>(cpu.regs.SP) << static_cast<u16>(cpu.regs.PC)
+        << static_cast<u8>(cpu.do_nmi) << static_cast<u8>(cpu.do_irq)
+        << static_cast<u32>(cpu.op_cycles) << static_cast<u8>(cpu.page_crossed);
 
     /* PPU */
-    out << static_cast<u8>(ppu.ppuctrl)
-        << static_cast<u8>(ppu.ppumask)
-        << static_cast<u8>(ppu.ppustatus)
-        << static_cast<u8>(ppu.oamaddr)
-        << static_cast<u8>(ppu.w)
-        << static_cast<u8>(ppu.fineX)
-        << static_cast<u16>(ppu.v)
-        << static_cast<u16>(ppu.t)
-        << static_cast<u8>(ppu.dataBuffer)
-        << static_cast<u16>(ppu.pixel)
-        << static_cast<u16>(ppu.scanline)
-        << static_cast<u8>(ppu.nmi)
-        << static_cast<u8>(ppu.mirrorMode)
-        << static_cast<u8>(ppu.oddFrame)
+    out << static_cast<u8>(ppu.ppuctrl) << static_cast<u8>(ppu.ppumask)
+        << static_cast<u8>(ppu.ppustatus) << static_cast<u8>(ppu.oamaddr)
+        << static_cast<u8>(ppu.w) << static_cast<u8>(ppu.fineX)
+        << static_cast<u16>(ppu.v) << static_cast<u16>(ppu.t)
+        << static_cast<u8>(ppu.dataBuffer) << static_cast<u16>(ppu.pixel)
+        << static_cast<u16>(ppu.scanline) << static_cast<u8>(ppu.nmi)
+        << static_cast<u8>(ppu.mirrorMode) << static_cast<u8>(ppu.oddFrame)
         << static_cast<u8>(ppu.openBus);
 
-    for (u8 b : ppu.vram) out << b;
-    for (u8 b : ppu.pal)  out << b;
-    for (u8 b : ppu.oam)  out << b;
+    for (u8 b : ppu.vram)
+        out << b;
+    for (u8 b : ppu.pal)
+        out << b;
+    for (u8 b : ppu.oam)
+        out << b;
 
     /* PPU bg/sprite */
-    out << static_cast<u8>(ppu.bgFetch.valid)
-        << static_cast<u16>(ppu.bgFetch.v)
+    out << static_cast<u8>(ppu.bgFetch.valid) << static_cast<u16>(ppu.bgFetch.v)
         << static_cast<u16>(ppu.bgFetch.table)
-        << static_cast<u8>(ppu.bgFetch.p0)
-        << static_cast<u8>(ppu.bgFetch.l0)
-        << static_cast<u8>(ppu.bgFetch.h0)
-        << static_cast<u8>(ppu.bgFetch.p1)
-        << static_cast<u8>(ppu.bgFetch.l1)
-        << static_cast<u8>(ppu.bgFetch.h1)
+        << static_cast<u8>(ppu.bgFetch.p0) << static_cast<u8>(ppu.bgFetch.l0)
+        << static_cast<u8>(ppu.bgFetch.h0) << static_cast<u8>(ppu.bgFetch.p1)
+        << static_cast<u8>(ppu.bgFetch.l1) << static_cast<u8>(ppu.bgFetch.h1)
+        << static_cast<u8>(ppu.bgFetch.nt) << static_cast<u8>(ppu.bgFetch.at)
+        << static_cast<u8>(ppu.bgFetch.low) << static_cast<u8>(ppu.bgFetch.high)
+        << static_cast<u16>(ppu.bgFetch.shLow)
+        << static_cast<u16>(ppu.bgFetch.shHigh)
+        << static_cast<u16>(ppu.bgFetch.shAttrLo)
+        << static_cast<u16>(ppu.bgFetch.shAttrHi)
         << static_cast<u8>(ppu.spriteCount);
-    for (const auto& s : ppu.OAM) {
+    for (const auto &s : ppu.OAM) {
         out << s.x;
         out << s.y;
         out << s.tile;
@@ -93,190 +85,126 @@ inline auto saveBinState(const QString& path,
     }
 
     /* APU */
-    out << apu.pulse1.enabled 
-        << apu.pulse1.duty 
-        << apu.pulse1.volPeriod 
-        << apu.pulse1.lengthHalt 
-        << apu.pulse1.constVol
-        << apu.pulse1.envelDiv 
-        << apu.pulse1.envelDecay 
-        << apu.pulse1.envelStart 
-        << apu.pulse1.swpPeriod 
-        << apu.pulse1.swpShift
-        << apu.pulse1.swpDiv 
-        << apu.pulse1.swpEnabled 
-        << apu.pulse1.swpNegate 
-        << apu.pulse1.swpReload 
-        << apu.pulse1.timerPeriod
-        << apu.pulse1.timer 
-        << apu.pulse1.seqPos 
+    out << apu.pulse1.enabled << apu.pulse1.duty << apu.pulse1.volPeriod
+        << apu.pulse1.lengthHalt << apu.pulse1.constVol << apu.pulse1.envelDiv
+        << apu.pulse1.envelDecay << apu.pulse1.envelStart
+        << apu.pulse1.swpPeriod << apu.pulse1.swpShift << apu.pulse1.swpDiv
+        << apu.pulse1.swpEnabled << apu.pulse1.swpNegate << apu.pulse1.swpReload
+        << apu.pulse1.timerPeriod << apu.pulse1.timer << apu.pulse1.seqPos
         << apu.pulse1.lenCnt;
 
-    out << apu.pulse2.enabled 
-        << apu.pulse2.duty 
-        << apu.pulse2.volPeriod 
-        << apu.pulse2.lengthHalt 
-        << apu.pulse2.constVol
-        << apu.pulse2.envelDiv 
-        << apu.pulse2.envelDecay 
-        << apu.pulse2.envelStart 
-        << apu.pulse2.swpPeriod 
-        << apu.pulse2.swpShift
-        << apu.pulse2.swpDiv 
-        << apu.pulse2.swpEnabled 
-        << apu.pulse2.swpNegate 
-        << apu.pulse2.swpReload 
-        << apu.pulse2.timerPeriod
-        << apu.pulse2.timer 
-        << apu.pulse2.seqPos 
+    out << apu.pulse2.enabled << apu.pulse2.duty << apu.pulse2.volPeriod
+        << apu.pulse2.lengthHalt << apu.pulse2.constVol << apu.pulse2.envelDiv
+        << apu.pulse2.envelDecay << apu.pulse2.envelStart
+        << apu.pulse2.swpPeriod << apu.pulse2.swpShift << apu.pulse2.swpDiv
+        << apu.pulse2.swpEnabled << apu.pulse2.swpNegate << apu.pulse2.swpReload
+        << apu.pulse2.timerPeriod << apu.pulse2.timer << apu.pulse2.seqPos
         << apu.pulse2.lenCnt;
 
-    out << apu.triangle.enabled
-        << apu.triangle.linearReloadValue 
-        << apu.triangle.linearCnt 
-        << apu.triangle.ctrlFlag
-        << apu.triangle.linearReloadFlag 
-        << apu.triangle.timerPeriod 
-        << apu.triangle.timer 
-        << apu.triangle.seqPos 
-        << apu.triangle.lenCnt;
+    out << apu.triangle.enabled << apu.triangle.linearReloadValue
+        << apu.triangle.linearCnt << apu.triangle.ctrlFlag
+        << apu.triangle.linearReloadFlag << apu.triangle.timerPeriod
+        << apu.triangle.timer << apu.triangle.seqPos << apu.triangle.lenCnt;
 
-    out << apu.noise.enabled 
-        << apu.noise.volPeriod 
-        << apu.noise.lenHalt 
-        << apu.noise.constVol 
-        << apu.noise.envelDiv
-        << apu.noise.envelDecay 
-        << apu.noise.envelStart 
-        << apu.noise.periodIndex 
-        << apu.noise.timer 
-        << apu.noise.lenCnt
-        << apu.noise.mode 
-        << apu.noise.shiftReg;
+    out << apu.noise.enabled << apu.noise.volPeriod << apu.noise.lenHalt
+        << apu.noise.constVol << apu.noise.envelDiv << apu.noise.envelDecay
+        << apu.noise.envelStart << apu.noise.periodIndex << apu.noise.timer
+        << apu.noise.lenCnt << apu.noise.mode << apu.noise.shiftReg;
 
-    out << apu.dmc.enabled 
-        << apu.dmc.irqEnabled 
-        << apu.dmc.rateIndex 
-        << apu.dmc.outLevel 
-        << apu.dmc.loop 
-        << apu.dmc.irqFlag
-        << apu.dmc.sampleAddrReg 
-        << apu.dmc.sampleLenReg 
-        << apu.dmc.bitsRemain 
-        << apu.dmc.shiftReg 
-        << apu.dmc.sampleBuffer
-        << apu.dmc.bufferEmpty 
-        << apu.dmc.timer 
-        << apu.dmc.bytesRemain 
-        << apu.dmc.active;
+    out << apu.dmc.enabled << apu.dmc.irqEnabled << apu.dmc.rateIndex
+        << apu.dmc.outLevel << apu.dmc.loop << apu.dmc.irqFlag
+        << apu.dmc.sampleAddrReg << apu.dmc.sampleLenReg << apu.dmc.bitsRemain
+        << apu.dmc.shiftReg << apu.dmc.sampleBuffer << apu.dmc.bufferEmpty
+        << apu.dmc.timer << apu.dmc.bytesRemain << apu.dmc.active;
 
-    out << apu.frameCycle 
-        << apu.frameCntMode5 
-        << apu.irqInhibit 
-        << apu.frameIrq 
-        << apu.oddCycle
-        << apu.frameCntDelay 
-        << apu.pendQuarterFrame 
-        << apu.pendHalfFrame 
-        << apu.delayHalfFrame 
-        << apu.frameIrqRepeat 
+    out << apu.frameCycle << apu.frameCntMode5 << apu.irqInhibit << apu.frameIrq
+        << apu.oddCycle << apu.frameCntDelay << apu.pendQuarterFrame
+        << apu.pendHalfFrame << apu.delayHalfFrame << apu.frameIrqRepeat
         << apu.sampleAcc;
 
     /* Memory */
-    for (u8 b : mem.ram)  out << b;
-    out << static_cast<u32>(mem.dma)
-        << static_cast<u8>(mem.dmaOdd)
-        << static_cast<u8>(mem.joy1)
-        << static_cast<u8>(mem.joy2)
-        << static_cast<u8>(mem.joy1Shift)
-        << static_cast<u8>(mem.joy2Shift);
+    for (u8 b : mem.ram)
+        out << b;
+    out << static_cast<u32>(mem.dma) << static_cast<u8>(mem.dmaOdd)
+        << static_cast<u8>(mem.joy1) << static_cast<u8>(mem.joy2)
+        << static_cast<u8>(mem.joy1Shift) << static_cast<u8>(mem.joy2Shift);
 
     out << region;
 
     return file.error() == QFile::NoError;
 }
- 
-inline auto loadBinState(const QString& path, 
-                         CPU::State& cpu, 
-                         PPU::State& ppu,
-                         APU::State& apu,
-                         Memory::State& mem,
-                         Mapper::State& mapper,
-                         u8& region) -> bool 
-{
+
+inline auto loadBinState(const QString &path, Core::CPU::State &cpu,
+                         Core::PPU::State &ppu, Core::APU::State &apu,
+                         Core::Memory::State &mem, Core::Mapper::State &mapper,
+                         u8 &region) -> bool {
     QFile file(path);
-    if (!file.open(QIODevice::ReadOnly)) return false;
+    if (!file.open(QIODevice::ReadOnly))
+        return false;
 
     QDataStream in(&file);
     in.setByteOrder(QDataStream::LittleEndian);
-
 
     /* Буферные переменные */
     u8 u8v;
     u32 u32v;
 
     /* Mapper */
-    in >> mapper.mapperNumber
-       >> mapper.mirrorMode
-       >> mapper.irqFlag;
+    in >> mapper.mapperNumber >> mapper.mirrorMode >> mapper.irqFlag;
 
     in >> u32v;
     mapper.prgRam.resize(u32v);
-    for (u32 i=0; i<u32v; ++i) { in >> u8v; mapper.prgRam[i] = u8v; }
+    for (u32 i = 0; i < u32v; ++i) {
+        in >> u8v;
+        mapper.prgRam[i] = u8v;
+    }
 
     in >> u32v;
     mapper.chrRam.resize(u32v);
-    for (u32 i=0; i<u32v; ++i) { in >> u8v; mapper.chrRam[i] = u8v; }
+    for (u32 i = 0; i < u32v; ++i) {
+        in >> u8v;
+        mapper.chrRam[i] = u8v;
+    }
 
     in >> u32v;
     mapper.mapperBlob.resize(u32v);
-    for (u32 i=0; i<u32v; ++i) { in >> u8v; mapper.mapperBlob[i] = u8v; }
+    for (u32 i = 0; i < u32v; ++i) {
+        in >> u8v;
+        mapper.mapperBlob[i] = u8v;
+    }
 
     /* CPU */
-    in >> cpu.regs.A
-       >> cpu.regs.X
-       >> cpu.regs.Y
-       >> cpu.regs.P
-       >> cpu.regs.SP
-       >> cpu.regs.PC
-       >> cpu.do_nmi
-       >> cpu.do_irq
-       >> cpu.op_cycles
-       >> cpu.page_crossed;
+    in >> cpu.regs.A >> cpu.regs.X >> cpu.regs.Y >> cpu.regs.P >> cpu.regs.SP >>
+        cpu.regs.PC >> cpu.do_nmi >> cpu.do_irq >> cpu.op_cycles >>
+        cpu.page_crossed;
 
     /* PPU */
-    in >> ppu.ppuctrl
-       >> ppu.ppumask
-       >> ppu.ppustatus
-       >> ppu.oamaddr
-       >> ppu.w
-       >> ppu.fineX
-       >> ppu.v
-       >> ppu.t
-       >> ppu.dataBuffer
-       >> ppu.pixel
-       >> ppu.scanline
-       >> ppu.nmi
-       >> ppu.mirrorMode
-       >> ppu.oddFrame
-       >> ppu.openBus;
+    in >> ppu.ppuctrl >> ppu.ppumask >> ppu.ppustatus >> ppu.oamaddr >> ppu.w >>
+        ppu.fineX >> ppu.v >> ppu.t >> ppu.dataBuffer >> ppu.pixel >>
+        ppu.scanline >> ppu.nmi >> ppu.mirrorMode >> ppu.oddFrame >>
+        ppu.openBus;
 
-    for (u16 i=0; i<4096; ++i) { in >> u8v; ppu.vram[i] = u8v; }
-    for (u8 i=0; i<32; ++i)   { in >> u8v; ppu.pal[i] = u8v; }
-    for (u16 i=0; i<256; ++i)  { in >> u8v; ppu.oam[i] = u8v; }
+    for (u16 i = 0; i < 4096; ++i) {
+        in >> u8v;
+        ppu.vram[i] = u8v;
+    }
+    for (u8 i = 0; i < 32; ++i) {
+        in >> u8v;
+        ppu.pal[i] = u8v;
+    }
+    for (u16 i = 0; i < 256; ++i) {
+        in >> u8v;
+        ppu.oam[i] = u8v;
+    }
 
     /* PPU bg/sprite */
-    in >> ppu.bgFetch.valid
-       >> ppu.bgFetch.v
-       >> ppu.bgFetch.table
-       >> ppu.bgFetch.p0
-       >> ppu.bgFetch.l0
-       >> ppu.bgFetch.h0
-       >> ppu.bgFetch.p1
-       >> ppu.bgFetch.l1
-       >> ppu.bgFetch.h1
-       >> ppu.spriteCount;
-    for (auto& s : ppu.OAM) {
+    in >> ppu.bgFetch.valid >> ppu.bgFetch.v >> ppu.bgFetch.table >>
+        ppu.bgFetch.p0 >> ppu.bgFetch.l0 >> ppu.bgFetch.h0 >> ppu.bgFetch.p1 >>
+        ppu.bgFetch.l1 >> ppu.bgFetch.h1 >> ppu.bgFetch.nt >> ppu.bgFetch.at >>
+        ppu.bgFetch.low >> ppu.bgFetch.high >> ppu.bgFetch.shLow >>
+        ppu.bgFetch.shHigh >> ppu.bgFetch.shAttrLo >> ppu.bgFetch.shAttrHi >>
+        ppu.spriteCount;
+    for (auto &s : ppu.OAM) {
         in >> s.x;
         in >> s.y;
         in >> s.tile;
@@ -287,103 +215,50 @@ inline auto loadBinState(const QString& path,
     }
 
     /* APU */
-    in >> apu.pulse1.enabled
-       >> apu.pulse1.duty
-       >> apu.pulse1.volPeriod
-       >> apu.pulse1.lengthHalt
-       >> apu.pulse1.constVol
-       >> apu.pulse1.envelDiv
-       >> apu.pulse1.envelDecay
-       >> apu.pulse1.envelStart
-       >> apu.pulse1.swpPeriod
-       >> apu.pulse1.swpShift
-       >> apu.pulse1.swpDiv
-       >> apu.pulse1.swpEnabled
-       >> apu.pulse1.swpNegate
-       >> apu.pulse1.swpReload
-       >> apu.pulse1.timerPeriod
-       >> apu.pulse1.timer
-       >> apu.pulse1.seqPos
-       >> apu.pulse1.lenCnt;
+    in >> apu.pulse1.enabled >> apu.pulse1.duty >> apu.pulse1.volPeriod >>
+        apu.pulse1.lengthHalt >> apu.pulse1.constVol >> apu.pulse1.envelDiv >>
+        apu.pulse1.envelDecay >> apu.pulse1.envelStart >>
+        apu.pulse1.swpPeriod >> apu.pulse1.swpShift >> apu.pulse1.swpDiv >>
+        apu.pulse1.swpEnabled >> apu.pulse1.swpNegate >> apu.pulse1.swpReload >>
+        apu.pulse1.timerPeriod >> apu.pulse1.timer >> apu.pulse1.seqPos >>
+        apu.pulse1.lenCnt;
 
-    in >> apu.pulse2.enabled
-       >> apu.pulse2.duty
-       >> apu.pulse2.volPeriod
-       >> apu.pulse2.lengthHalt
-       >> apu.pulse2.constVol
-       >> apu.pulse2.envelDiv
-       >> apu.pulse2.envelDecay
-       >> apu.pulse2.envelStart
-       >> apu.pulse2.swpPeriod
-       >> apu.pulse2.swpShift
-       >> apu.pulse2.swpDiv
-       >> apu.pulse2.swpEnabled
-       >> apu.pulse2.swpNegate
-       >> apu.pulse2.swpReload
-       >> apu.pulse2.timerPeriod
-       >> apu.pulse2.timer
-       >> apu.pulse2.seqPos
-       >> apu.pulse2.lenCnt;
+    in >> apu.pulse2.enabled >> apu.pulse2.duty >> apu.pulse2.volPeriod >>
+        apu.pulse2.lengthHalt >> apu.pulse2.constVol >> apu.pulse2.envelDiv >>
+        apu.pulse2.envelDecay >> apu.pulse2.envelStart >>
+        apu.pulse2.swpPeriod >> apu.pulse2.swpShift >> apu.pulse2.swpDiv >>
+        apu.pulse2.swpEnabled >> apu.pulse2.swpNegate >> apu.pulse2.swpReload >>
+        apu.pulse2.timerPeriod >> apu.pulse2.timer >> apu.pulse2.seqPos >>
+        apu.pulse2.lenCnt;
 
-    in >> apu.triangle.enabled
-       >> apu.triangle.linearReloadValue
-       >> apu.triangle.linearCnt
-       >> apu.triangle.ctrlFlag
-       >> apu.triangle.linearReloadFlag
-       >> apu.triangle.timerPeriod
-       >> apu.triangle.timer
-       >> apu.triangle.seqPos
-       >> apu.triangle.lenCnt;
+    in >> apu.triangle.enabled >> apu.triangle.linearReloadValue >>
+        apu.triangle.linearCnt >> apu.triangle.ctrlFlag >>
+        apu.triangle.linearReloadFlag >> apu.triangle.timerPeriod >>
+        apu.triangle.timer >> apu.triangle.seqPos >> apu.triangle.lenCnt;
 
-    in >> apu.noise.enabled
-       >> apu.noise.volPeriod
-       >> apu.noise.lenHalt
-       >> apu.noise.constVol
-       >> apu.noise.envelDiv
-       >> apu.noise.envelDecay
-       >> apu.noise.envelStart
-       >> apu.noise.periodIndex
-       >> apu.noise.timer
-       >> apu.noise.lenCnt
-       >> apu.noise.mode
-       >> apu.noise.shiftReg;
+    in >> apu.noise.enabled >> apu.noise.volPeriod >> apu.noise.lenHalt >>
+        apu.noise.constVol >> apu.noise.envelDiv >> apu.noise.envelDecay >>
+        apu.noise.envelStart >> apu.noise.periodIndex >> apu.noise.timer >>
+        apu.noise.lenCnt >> apu.noise.mode >> apu.noise.shiftReg;
 
-    in >> apu.dmc.enabled
-       >> apu.dmc.irqEnabled
-       >> apu.dmc.rateIndex
-       >> apu.dmc.outLevel
-       >> apu.dmc.loop
-       >> apu.dmc.irqFlag
-       >> apu.dmc.sampleAddrReg
-       >> apu.dmc.sampleLenReg
-       >> apu.dmc.bitsRemain
-       >> apu.dmc.shiftReg
-       >> apu.dmc.sampleBuffer
-       >> apu.dmc.bufferEmpty
-       >> apu.dmc.timer
-       >> apu.dmc.bytesRemain
-       >> apu.dmc.active;
+    in >> apu.dmc.enabled >> apu.dmc.irqEnabled >> apu.dmc.rateIndex >>
+        apu.dmc.outLevel >> apu.dmc.loop >> apu.dmc.irqFlag >>
+        apu.dmc.sampleAddrReg >> apu.dmc.sampleLenReg >> apu.dmc.bitsRemain >>
+        apu.dmc.shiftReg >> apu.dmc.sampleBuffer >> apu.dmc.bufferEmpty >>
+        apu.dmc.timer >> apu.dmc.bytesRemain >> apu.dmc.active;
 
-    in >> apu.frameCycle
-       >> apu.frameCntMode5
-       >> apu.irqInhibit
-       >> apu.frameIrq
-       >> apu.oddCycle
-       >> apu.frameCntDelay
-       >> apu.pendQuarterFrame
-       >> apu.pendHalfFrame
-       >> apu.delayHalfFrame
-       >> apu.frameIrqRepeat
-       >> apu.sampleAcc;
+    in >> apu.frameCycle >> apu.frameCntMode5 >> apu.irqInhibit >>
+        apu.frameIrq >> apu.oddCycle >> apu.frameCntDelay >>
+        apu.pendQuarterFrame >> apu.pendHalfFrame >> apu.delayHalfFrame >>
+        apu.frameIrqRepeat >> apu.sampleAcc;
 
     /* Memory */
-    for (u16 i=0; i<2048; ++i) { in >> u8v; mem.ram[i] = u8v; }
-    in >> mem.dma
-       >> mem.dmaOdd
-       >> mem.joy1
-       >> mem.joy2
-       >> mem.joy1Shift
-       >> mem.joy2Shift;
+    for (u16 i = 0; i < 2048; ++i) {
+        in >> u8v;
+        mem.ram[i] = u8v;
+    }
+    in >> mem.dma >> mem.dmaOdd >> mem.joy1 >> mem.joy2 >> mem.joy1Shift >>
+        mem.joy2Shift;
 
     in >> region;
 

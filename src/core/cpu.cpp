@@ -1,19 +1,21 @@
 #include "cpu.hpp"
-#include "cpu_op.hpp"
 #include "common.hpp"
+#include "cpu_op.hpp"
 
+namespace Core {
 
 /* Системные функции */
 void CPU::reset() {
-    if (!mem) return;
+    if (!mem)
+        return;
 
     c.regs.A = 0;
     c.regs.X = 0;
     c.regs.Y = 0;
     c.regs.P = c.U | c.I;
     c.regs.SP = 0xFD;
-    c.regs.PC = (static_cast<u16>(mem->read(0xFFFD)) << 8)
-              | static_cast<u16>(mem->read(0xFFFC));
+    c.regs.PC = (static_cast<u16>(mem->read(0xFFFD)) << 8) |
+                static_cast<u16>(mem->read(0xFFFC));
     c.op_cycles = 7;
     c.do_nmi = 0;
     c.nmi_delay = 0;
@@ -22,7 +24,6 @@ void CPU::reset() {
     c.opEntry.op_name = "";
     c.opEntry.am = C6502::IMP;
 }
-
 
 /* Линии прерываний */
 void CPU::C6502::nmi() {
@@ -43,7 +44,6 @@ void CPU::C6502::irq() {
     op_cycles = 7;
 }
 
-
 /* Выполнение одной инструкции */
 void CPU::C6502::step() {
     const u8 opcode = p->mem->read(regs.PC++);
@@ -57,7 +57,7 @@ void CPU::C6502::step() {
         return;
     }
 
-    const OpEntry& op = it->second;
+    const OpEntry &op = it->second;
 
     p->c.opEntry.op_name = op.op_name;
     p->c.opEntry.am = op.am;
@@ -66,18 +66,30 @@ void CPU::C6502::step() {
 
     auto resolve_addr = [this](AddrMode am) -> u16 {
         switch (am) {
-            case IMM: return AM_IMM();
-            case IMP: return AM_IMP();
-            case ZPG: return AM_ZPG();
-            case ZPGX: return AM_ZPX();
-            case ZPGY: return AM_ZPY();
-            case REL: return AM_REL();
-            case ABS: return AM_ABS();
-            case ABSX: return AM_ABX();
-            case ABSY: return AM_ABY();
-            case IND: return AM_IND();
-            case INDX: return AM_INX();
-            case INDY: return AM_INY();
+        case IMM:
+            return AM_IMM();
+        case IMP:
+            return AM_IMP();
+        case ZPG:
+            return AM_ZPG();
+        case ZPGX:
+            return AM_ZPX();
+        case ZPGY:
+            return AM_ZPY();
+        case REL:
+            return AM_REL();
+        case ABS:
+            return AM_ABS();
+        case ABSX:
+            return AM_ABX();
+        case ABSY:
+            return AM_ABY();
+        case IND:
+            return AM_IND();
+        case INDX:
+            return AM_INX();
+        case INDY:
+            return AM_INY();
         }
 
         return AM_IMP();
@@ -97,9 +109,9 @@ void CPU::C6502::step() {
     }
 }
 
-
 void CPU::exec() {
-    if (!mem) return;
+    if (!mem)
+        return;
 
     if (const u32 d = mem->getDma(); d != 0) {
         c.op_cycles = d;
@@ -126,3 +138,5 @@ void CPU::exec() {
 
     c.step();
 }
+
+} // namespace Core

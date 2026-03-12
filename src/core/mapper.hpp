@@ -1,33 +1,36 @@
 #pragma once
 
-#include <vector>
-#include <string>
 #include <filesystem>
+#include <string>
+#include <vector>
 
-#include "lua.hpp"
 #include "common.hpp"
+#include "lua.hpp"
 
-
+namespace Core {
 class Mapper : public Lua {
-public:
+  public:
     Mapper() = default;
     ~Mapper() = default;
 
-    void load(const std::filesystem::path& srcPath = "mappers/") {
-        std::filesystem::path path = srcPath / ("mp" + std::to_string(mapperNumber) + ".lua");
+    void load(const std::filesystem::path &srcPath = "mappers/") {
+        std::filesystem::path path =
+            srcPath / ("mp" + std::to_string(mapperNumber) + ".lua");
         open(path);
     }
 
-public:
+  public:
     inline u8 readPRG(u16 addr) {
-        const u32 mappedAddr = (!hasReadPRG) ? addr : callFunc(IDX_READ_PRG, addr);
+        const u32 mappedAddr =
+            (!hasReadPRG) ? addr : callFunc(IDX_READ_PRG, addr);
         if (mappedAddr != 0xFFFFFFFF)
             return PRG_ROM[mappedAddr];
         return 0;
     }
 
     inline u8 readCHR(u16 addr) {
-        const u32 mappedAddr = (!hasReadCHR) ? addr : callFunc(IDX_READ_CHR, addr);
+        const u32 mappedAddr =
+            (!hasReadCHR) ? addr : callFunc(IDX_READ_CHR, addr);
         if (mappedAddr != 0xFFFFFFFF)
             return CHR_ROM[mappedAddr];
         return 0;
@@ -35,16 +38,17 @@ public:
 
     inline u8 readRAM(u16 addr) { return PRG_RAM[addr & 0x1FFF]; }
 
-
     inline void writePRG(u16 addr, u8 value) {
-        const u32 mappedAddr = (!hasWritePRG) ? addr : callFunc(IDX_WRITE_PRG, addr, value);
+        const u32 mappedAddr =
+            (!hasWritePRG) ? addr : callFunc(IDX_WRITE_PRG, addr, value);
         if (mappedAddr != 0xFFFFFFFF) {
             PRG_ROM[mappedAddr] = value;
         }
     }
 
     inline void writeCHR(u16 addr, u8 value) {
-        const u32 mappedAddr = (!hasWriteCHR) ? addr : callFunc(IDX_WRITE_CHR, addr, value);
+        const u32 mappedAddr =
+            (!hasWriteCHR) ? addr : callFunc(IDX_WRITE_CHR, addr, value);
         if (mappedAddr != 0xFFFFFFFF) {
             CHR_ROM[mappedAddr] = value;
         }
@@ -52,7 +56,7 @@ public:
 
     inline void writeRAM(u16 addr, u8 value) { PRG_RAM[addr & 0x1FFF] = value; }
 
-public:
+  public:
     struct State {
         u8 mapperNumber{0};
         u8 mirrorMode{0};
@@ -75,7 +79,7 @@ public:
         return s;
     }
 
-    void loadState(const State& state) {
+    void loadState(const State &state) {
         mapperNumber = state.mapperNumber;
         mirror = static_cast<Cartridge::MirrorMode>(state.mirrorMode);
         irqFlag = state.irqFlag;
@@ -86,5 +90,6 @@ public:
         loadMapperState(state.mapperBlob);
         this->state = state;
     }
-
 };
+
+} // namespace Core

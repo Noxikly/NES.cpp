@@ -3,8 +3,8 @@
 
 #include <QAudioFormat>
 #include <QAudioSink>
-#include <QMediaDevices>
 #include <QIODevice>
+#include <QMediaDevices>
 
 #include <algorithm>
 #include <cstring>
@@ -15,8 +15,10 @@ NesAudio::NesAudio() {
     format.setChannelCount(AUDIO_CHANNELS);
     format.setSampleFormat(QAudioFormat::Int16);
 
-    sink = std::make_unique<QAudioSink>(QMediaDevices::defaultAudioOutput(), format);
+    sink = std::make_unique<QAudioSink>(QMediaDevices::defaultAudioOutput(),
+                                        format);
     sink->setBufferSize(2048 * 4);
+    sink->setVolume(volume);
 
     io = sink->start();
 }
@@ -28,14 +30,16 @@ NesAudio::~NesAudio() {
 
 void NesAudio::reset() {
     pcmBuffer.clear();
-    if (!sink) return;
+    if (!sink)
+        return;
 
     sink->stop();
     io = sink->start();
 }
 
-void NesAudio::pushSamples(const std::vector<float>& samples) {
-    if (!sink || !io || samples.empty()) return;
+void NesAudio::pushSamples(const std::vector<float> &samples) {
+    if (!enabled || !sink || !io || samples.empty())
+        return;
 
     const qsizetype totalFrames = static_cast<qsizetype>(samples.size());
     const qsizetype kFrames = std::min(totalFrames, maxFrames);
@@ -44,10 +48,11 @@ void NesAudio::pushSamples(const std::vector<float>& samples) {
     QByteArray in;
     in.resize(kFrames * static_cast<qsizetype>(sizeof(qint16) * 2));
 
-    auto* out = reinterpret_cast<qint16*>(in.data());
+    auto *out = reinterpret_cast<qint16 *>(in.data());
 
-    for (qsizetype i=0; i < kFrames; ++i) {
-        const qint16 pcm = toI16(samples[static_cast<std::size_t>(startFrame + i)]);
+    for (qsizetype i = 0; i < kFrames; ++i) {
+        const qint16 pcm =
+            toI16(samples[static_cast<std::size_t>(startFrame + i)]);
         out[i * 2 + 0] = pcm;
         out[i * 2 + 1] = pcm;
     }
@@ -59,17 +64,41 @@ void NesAudio::pushSamples(const std::vector<float>& samples) {
 
     while (!pcmBuffer.isEmpty()) {
         const qint64 freeBytes = sink->bytesFree();
-        if (freeBytes <= 0) break;
+        if (freeBytes <= 0)
+            break;
 
         qint64 toWrite = std::min<qint64>(freeBytes, pcmBuffer.size());
         toWrite &= ~qint64(3); /* stereo 16-bit (4 bytes) */
-        if (toWrite <= 0) break;
+        if (toWrite <= 0)
+            break;
 
         const qint64 written = io->write(pcmBuffer.constData(), toWrite);
-        if (written <= 0) break;
+        if (written <= 0)
+            break;
 
         pcmBuffer.remove(0, static_cast<qsizetype>(written));
     }
+}
+
+void NesAudio::setEnabled(bool value) {
+    enabled = value;
+    if (!sink)
+        return;
+
+    if (enabled) {
+        if (!io)
+            io = sink->start();
+    } else {
+        sink->stop();
+        io = nullptr;
+        pcmBuffer.clear();
+    }
+}
+
+void NesAudio::setVolume(float v) {
+    volume = std::clamp(v, 0.0f, 1.0f);
+    if (sink)
+        sink->setVolume(volume * volume);
 }
 
 auto NesAudio::toI16(float sample) -> qint16 {

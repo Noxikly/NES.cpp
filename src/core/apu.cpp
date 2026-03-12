@@ -1,9 +1,11 @@
 #include <algorithm>
-#include <vector>
 #include <array>
+#include <vector>
 
 #include "apu.hpp"
 #include "common.hpp"
+
+namespace Core {
 
 void APU::powerUp() {
     state.noise.timer = NOISE_TABLE[0];
@@ -47,181 +49,198 @@ void APU::reset() {
 
 void APU::writeReg(u16 addr, u8 value) {
     switch (addr) {
-        case 0x4000:
-            state.pulse1.duty = (value >> 6) & 0x03;
-            state.pulse1.lengthHalt = (value & 0x20) != 0;
-            state.pulse1.constVol = (value & 0x10) != 0;
-            state.pulse1.volPeriod = value & 0x0F;
-            break;
+    case 0x4000:
+        state.pulse1.duty = (value >> 6) & 0x03;
+        state.pulse1.lengthHalt = (value & 0x20) != 0;
+        state.pulse1.constVol = (value & 0x10) != 0;
+        state.pulse1.volPeriod = value & 0x0F;
+        break;
 
-        case 0x4001:
-            state.pulse1.swpEnabled = (value & 0x80) != 0;
-            state.pulse1.swpPeriod = (value >> 4) & 0x07;
-            state.pulse1.swpNegate = (value & 0x08) != 0;
-            state.pulse1.swpShift = value & 0x07;
-            state.pulse1.swpReload = true;
-            break;
+    case 0x4001:
+        state.pulse1.swpEnabled = (value & 0x80) != 0;
+        state.pulse1.swpPeriod = (value >> 4) & 0x07;
+        state.pulse1.swpNegate = (value & 0x08) != 0;
+        state.pulse1.swpShift = value & 0x07;
+        state.pulse1.swpReload = true;
+        break;
 
-        case 0x4002:
-            state.pulse1.timerPeriod = static_cast<u16>((state.pulse1.timerPeriod & 0x0700) | value);
-            break;
+    case 0x4002:
+        state.pulse1.timerPeriod =
+            static_cast<u16>((state.pulse1.timerPeriod & 0x0700) | value);
+        break;
 
-        case 0x4003:
-            state.pulse1.timerPeriod = static_cast<u16>((state.pulse1.timerPeriod & 0x00FF) | ((value & 0x07) << 8));
-            state.pulse1.seqPos = 0;
-            state.pulse1.envelStart = true;
-            if (state.pulse1.enabled) {
-                state.pulse1.lenCnt = LENGTH_TABLE[(value >> 3) & 0x1F];
-            }
-            break;
-
-        case 0x4004:
-            state.pulse2.duty = (value >> 6) & 0x03;
-            state.pulse2.lengthHalt = (value & 0x20) != 0;
-            state.pulse2.constVol = (value & 0x10) != 0;
-            state.pulse2.volPeriod = value & 0x0F;
-            break;
-
-        case 0x4005:
-            state.pulse2.swpEnabled = (value & 0x80) != 0;
-            state.pulse2.swpPeriod = (value >> 4) & 0x07;
-            state.pulse2.swpNegate = (value & 0x08) != 0;
-            state.pulse2.swpShift = value & 0x07;
-            state.pulse2.swpReload = true;
-            break;
-
-        case 0x4006:
-            state.pulse2.timerPeriod = static_cast<u16>((state.pulse2.timerPeriod & 0x0700) | value);
-            break;
-
-        case 0x4007:
-            state.pulse2.timerPeriod = static_cast<u16>((state.pulse2.timerPeriod & 0x00FF) | ((value & 0x07) << 8));
-            state.pulse2.seqPos = 0;
-            state.pulse2.envelStart = true;
-            if (state.pulse2.enabled) {
-                state.pulse2.lenCnt = LENGTH_TABLE[(value >> 3) & 0x1F];
-            }
-            break;
-
-        case 0x4008:
-            state.triangle.ctrlFlag = (value & 0x80) != 0;
-            state.triangle.linearReloadValue = value & 0x7F;
-            break;
-
-        case 0x400A:
-            state.triangle.timerPeriod = static_cast<u16>((state.triangle.timerPeriod & 0x0700) | value);
-            break;
-
-        case 0x400B:
-            state.triangle.timerPeriod = static_cast<u16>((state.triangle.timerPeriod & 0x00FF) | ((value & 0x07) << 8));
-            if (state.triangle.enabled) {
-                state.triangle.lenCnt = LENGTH_TABLE[(value >> 3) & 0x1F];
-            }
-            state.triangle.linearReloadFlag = true;
-            break;
-
-        case 0x400C:
-            state.noise.lenHalt = (value & 0x20) != 0;
-            state.noise.constVol = (value & 0x10) != 0;
-            state.noise.volPeriod = value & 0x0F;
-            break;
-
-        case 0x400E:
-            state.noise.mode = (value & 0x80) != 0;
-            state.noise.periodIndex = value & 0x0F;
-            break;
-
-        case 0x400F:
-            if (state.noise.enabled) {
-                state.noise.lenCnt = LENGTH_TABLE[(value >> 3) & 0x1F];
-            }
-            state.noise.envelStart = true;
-            break;
-
-        case 0x4010:
-            state.dmc.irqEnabled = (value & 0x80) != 0;
-            state.dmc.loop = (value & 0x40) != 0;
-            state.dmc.rateIndex = value & 0x0F;
-            if (!state.dmc.irqEnabled) {
-                state.dmc.irqFlag = false;
-            }
-            break;
-
-        case 0x4011:
-            state.dmc.outLevel = value & 0x7F;
-            break;
-
-        case 0x4012:
-            state.dmc.sampleAddrReg = value;
-            break;
-
-        case 0x4013:
-            state.dmc.sampleLenReg = value;
-            break;
-
-        case 0x4015: {
-            state.pulse1.enabled = (value & 0x01) != 0;
-            state.pulse2.enabled = (value & 0x02) != 0;
-            state.triangle.enabled = (value & 0x04) != 0;
-            state.noise.enabled = (value & 0x08) != 0;
-
-            if (!state.pulse1.enabled) state.pulse1.lenCnt = 0;
-            if (!state.pulse2.enabled) state.pulse2.lenCnt = 0;
-            if (!state.triangle.enabled) state.triangle.lenCnt = 0;
-            if (!state.noise.enabled) state.noise.lenCnt = 0;
-
-            const bool dmcEnable = (value & 0x10) != 0;
-            state.dmc.enabled = dmcEnable;
-            state.dmc.irqFlag = false;
-
-            if (!dmcEnable) {
-                state.dmc.active = false;
-                state.dmc.bytesRemain = 0;
-                state.dmc.bitsRemain = 0;
-                state.dmc.shiftReg = 0;
-                state.dmc.bufferEmpty = true;
-            } else if (state.dmc.bytesRemain == 0) {
-                state.dmc.active = true;
-                state.dmc.bytesRemain = static_cast<u16>(state.dmc.sampleLenReg) * 16 + 1;
-
-                if (state.dmc.bufferEmpty && state.dmc.bytesRemain > 0) {
-                    state.dmc.sampleBuffer = 0x00;
-                    state.dmc.bufferEmpty = false;
-                    --state.dmc.bytesRemain;
-                    if (state.dmc.bytesRemain == 0 && !state.dmc.loop)
-                        state.dmc.irqFlag = state.dmc.irqEnabled;
-
-                }
-            }
-            break;
+    case 0x4003:
+        state.pulse1.timerPeriod = static_cast<u16>(
+            (state.pulse1.timerPeriod & 0x00FF) | ((value & 0x07) << 8));
+        state.pulse1.seqPos = 0;
+        state.pulse1.envelStart = true;
+        if (state.pulse1.enabled) {
+            state.pulse1.lenCnt = LENGTH_TABLE[(value >> 3) & 0x1F];
         }
+        break;
 
-        case 0x4017:
-            state.frameCntMode5 = (value & 0x80) != 0;
-            state.irqInhibit = (value & 0x40) != 0;
-            if (state.irqInhibit) {
-                state.frameIrq = false;
-                state.frameIrqRepeat = 0;
+    case 0x4004:
+        state.pulse2.duty = (value >> 6) & 0x03;
+        state.pulse2.lengthHalt = (value & 0x20) != 0;
+        state.pulse2.constVol = (value & 0x10) != 0;
+        state.pulse2.volPeriod = value & 0x0F;
+        break;
+
+    case 0x4005:
+        state.pulse2.swpEnabled = (value & 0x80) != 0;
+        state.pulse2.swpPeriod = (value >> 4) & 0x07;
+        state.pulse2.swpNegate = (value & 0x08) != 0;
+        state.pulse2.swpShift = value & 0x07;
+        state.pulse2.swpReload = true;
+        break;
+
+    case 0x4006:
+        state.pulse2.timerPeriod =
+            static_cast<u16>((state.pulse2.timerPeriod & 0x0700) | value);
+        break;
+
+    case 0x4007:
+        state.pulse2.timerPeriod = static_cast<u16>(
+            (state.pulse2.timerPeriod & 0x00FF) | ((value & 0x07) << 8));
+        state.pulse2.seqPos = 0;
+        state.pulse2.envelStart = true;
+        if (state.pulse2.enabled) {
+            state.pulse2.lenCnt = LENGTH_TABLE[(value >> 3) & 0x1F];
+        }
+        break;
+
+    case 0x4008:
+        state.triangle.ctrlFlag = (value & 0x80) != 0;
+        state.triangle.linearReloadValue = value & 0x7F;
+        break;
+
+    case 0x400A:
+        state.triangle.timerPeriod =
+            static_cast<u16>((state.triangle.timerPeriod & 0x0700) | value);
+        break;
+
+    case 0x400B:
+        state.triangle.timerPeriod = static_cast<u16>(
+            (state.triangle.timerPeriod & 0x00FF) | ((value & 0x07) << 8));
+        if (state.triangle.enabled) {
+            state.triangle.lenCnt = LENGTH_TABLE[(value >> 3) & 0x1F];
+        }
+        state.triangle.linearReloadFlag = true;
+        break;
+
+    case 0x400C:
+        state.noise.lenHalt = (value & 0x20) != 0;
+        state.noise.constVol = (value & 0x10) != 0;
+        state.noise.volPeriod = value & 0x0F;
+        break;
+
+    case 0x400E:
+        state.noise.mode = (value & 0x80) != 0;
+        state.noise.periodIndex = value & 0x0F;
+        break;
+
+    case 0x400F:
+        if (state.noise.enabled) {
+            state.noise.lenCnt = LENGTH_TABLE[(value >> 3) & 0x1F];
+        }
+        state.noise.envelStart = true;
+        break;
+
+    case 0x4010:
+        state.dmc.irqEnabled = (value & 0x80) != 0;
+        state.dmc.loop = (value & 0x40) != 0;
+        state.dmc.rateIndex = value & 0x0F;
+        if (!state.dmc.irqEnabled) {
+            state.dmc.irqFlag = false;
+        }
+        break;
+
+    case 0x4011:
+        state.dmc.outLevel = value & 0x7F;
+        break;
+
+    case 0x4012:
+        state.dmc.sampleAddrReg = value;
+        break;
+
+    case 0x4013:
+        state.dmc.sampleLenReg = value;
+        break;
+
+    case 0x4015: {
+        state.pulse1.enabled = (value & 0x01) != 0;
+        state.pulse2.enabled = (value & 0x02) != 0;
+        state.triangle.enabled = (value & 0x04) != 0;
+        state.noise.enabled = (value & 0x08) != 0;
+
+        if (!state.pulse1.enabled)
+            state.pulse1.lenCnt = 0;
+        if (!state.pulse2.enabled)
+            state.pulse2.lenCnt = 0;
+        if (!state.triangle.enabled)
+            state.triangle.lenCnt = 0;
+        if (!state.noise.enabled)
+            state.noise.lenCnt = 0;
+
+        const bool dmcEnable = (value & 0x10) != 0;
+        state.dmc.enabled = dmcEnable;
+        state.dmc.irqFlag = false;
+
+        if (!dmcEnable) {
+            state.dmc.active = false;
+            state.dmc.bytesRemain = 0;
+            state.dmc.bitsRemain = 0;
+            state.dmc.shiftReg = 0;
+            state.dmc.bufferEmpty = true;
+        } else if (state.dmc.bytesRemain == 0) {
+            state.dmc.active = true;
+            state.dmc.bytesRemain =
+                static_cast<u16>(state.dmc.sampleLenReg) * 16 + 1;
+
+            if (state.dmc.bufferEmpty && state.dmc.bytesRemain > 0) {
+                state.dmc.sampleBuffer = 0x00;
+                state.dmc.bufferEmpty = false;
+                --state.dmc.bytesRemain;
+                if (state.dmc.bytesRemain == 0 && !state.dmc.loop)
+                    state.dmc.irqFlag = state.dmc.irqEnabled;
             }
-            state.frameCntDelay = 3;
-            state.pendQuarterFrame = state.frameCntMode5;
-            state.pendHalfFrame = state.frameCntMode5;
-            break;
+        }
+        break;
+    }
 
-        default:
-            break;
+    case 0x4017:
+        state.frameCntMode5 = (value & 0x80) != 0;
+        state.irqInhibit = (value & 0x40) != 0;
+        if (state.irqInhibit) {
+            state.frameIrq = false;
+            state.frameIrqRepeat = 0;
+        }
+        state.frameCntDelay = 3;
+        state.pendQuarterFrame = state.frameCntMode5;
+        state.pendHalfFrame = state.frameCntMode5;
+        break;
+
+    default:
+        break;
     }
 }
 
 u8 APU::readStatus() {
     u8 status = 0;
-    if (state.pulse1.lenCnt > 0) status |= 0x01;
-    if (state.pulse2.lenCnt > 0) status |= 0x02;
-    if (state.triangle.lenCnt > 0) status |= 0x04;
-    if (state.noise.lenCnt > 0) status |= 0x08;
-    if (state.dmc.bytesRemain > 0) status |= 0x10;
-    if (state.frameIrq) status |= 0x40;
-    if (state.dmc.irqFlag) status |= 0x80;
+    if (state.pulse1.lenCnt > 0)
+        status |= 0x01;
+    if (state.pulse2.lenCnt > 0)
+        status |= 0x02;
+    if (state.triangle.lenCnt > 0)
+        status |= 0x04;
+    if (state.noise.lenCnt > 0)
+        status |= 0x08;
+    if (state.dmc.bytesRemain > 0)
+        status |= 0x10;
+    if (state.frameIrq)
+        status |= 0x40;
+    if (state.dmc.irqFlag)
+        status |= 0x80;
 
     state.frameIrq = false;
     return status;
@@ -273,8 +292,7 @@ void APU::step(u32 cpuCycles) {
         tickTriangleTimer();
         tickDmc();
 
-        for (state.sampleAcc += cyclesPerSample; 
-             state.sampleAcc >= 1.0; 
+        for (state.sampleAcc += cyclesPerSample; state.sampleAcc >= 1.0;
              state.sampleAcc -= 1.0)
             samples.push_back(mixSample());
 
@@ -284,18 +302,18 @@ void APU::step(u32 cpuCycles) {
 
 void APU::tickFrameCounter() {
     switch (state.frameCycle) {
-        case 3729:
-        case 11186:
-            quarterFrame();
-            break;
+    case 3729:
+    case 11186:
+        quarterFrame();
+        break;
 
-        case 7457:
-            quarterFrame();
-            state.delayHalfFrame = true;
-            break;
+    case 7457:
+        quarterFrame();
+        state.delayHalfFrame = true;
+        break;
 
-        default:
-            break;
+    default:
+        break;
     }
 
     if (state.frameCntMode5) {
@@ -318,26 +336,17 @@ void APU::tickFrameCounter() {
 }
 
 void APU::quarterFrame() {
-    clockEnvelope(
-        state.pulse1.lengthHalt,
-        state.pulse1.volPeriod,
-        state.pulse1.envelStart,
-        state.pulse1.envelDiv,
-        state.pulse1.envelDecay);
+    clockEnvelope(state.pulse1.lengthHalt, state.pulse1.volPeriod,
+                  state.pulse1.envelStart, state.pulse1.envelDiv,
+                  state.pulse1.envelDecay);
 
-    clockEnvelope(
-        state.pulse2.lengthHalt,
-        state.pulse2.volPeriod,
-        state.pulse2.envelStart,
-        state.pulse2.envelDiv,
-        state.pulse2.envelDecay);
+    clockEnvelope(state.pulse2.lengthHalt, state.pulse2.volPeriod,
+                  state.pulse2.envelStart, state.pulse2.envelDiv,
+                  state.pulse2.envelDecay);
 
-    clockEnvelope(
-        state.noise.lenHalt,
-        state.noise.volPeriod,
-        state.noise.envelStart,
-        state.noise.envelDiv,
-        state.noise.envelDecay);
+    clockEnvelope(state.noise.lenHalt, state.noise.volPeriod,
+                  state.noise.envelStart, state.noise.envelDiv,
+                  state.noise.envelDecay);
 
     if (state.triangle.linearReloadFlag)
         state.triangle.linearCnt = state.triangle.linearReloadValue;
@@ -358,7 +367,8 @@ void APU::halfFrame() {
     clockSweep(state.pulse2, true);
 }
 
-void APU::clockEnvelope(bool lenHalt, u8 volPeriod, bool& startFlag, u8& div, u8& decay) {
+void APU::clockEnvelope(bool lenHalt, u8 volPeriod, bool &startFlag, u8 &div,
+                        u8 &decay) {
     if (startFlag) {
         startFlag = false;
         decay = 15;
@@ -371,24 +381,31 @@ void APU::clockEnvelope(bool lenHalt, u8 volPeriod, bool& startFlag, u8& div, u8
         if (decay == 0) {
             if (lenHalt)
                 decay = 15;
-        } else --decay;
-    } else --div;
+        } else
+            --decay;
+    } else
+        --div;
 }
 
-void APU::clockSweep(Pulse& pulse, bool secondChannel) {
-    const bool doSweep = pulse.swpEnabled && (pulse.swpShift > 0) && (pulse.lenCnt > 0);
+void APU::clockSweep(Pulse &pulse, bool secondChannel) {
+    const bool doSweep =
+        pulse.swpEnabled && (pulse.swpShift > 0) && (pulse.lenCnt > 0);
 
     if (pulse.swpDiv == 0) {
         if (doSweep) {
-            const u16 change = static_cast<u16>(pulse.timerPeriod >> pulse.swpShift);
+            const u16 change =
+                static_cast<u16>(pulse.timerPeriod >> pulse.swpShift);
             if (pulse.swpNegate) {
                 const u16 bias = secondChannel ? 0 : 1;
-                pulse.timerPeriod = static_cast<u16>(pulse.timerPeriod - change - bias);
+                pulse.timerPeriod =
+                    static_cast<u16>(pulse.timerPeriod - change - bias);
             } else
-                pulse.timerPeriod = static_cast<u16>(pulse.timerPeriod + change);
+                pulse.timerPeriod =
+                    static_cast<u16>(pulse.timerPeriod + change);
         }
         pulse.swpDiv = pulse.swpPeriod;
-    } else --pulse.swpDiv;
+    } else
+        --pulse.swpDiv;
 
     if (pulse.swpReload) {
         pulse.swpReload = false;
@@ -396,19 +413,22 @@ void APU::clockSweep(Pulse& pulse, bool secondChannel) {
     }
 }
 
-void APU::tickPulseTimer(Pulse& pulse) {
+void APU::tickPulseTimer(Pulse &pulse) {
     if (pulse.timer == 0) {
         pulse.timer = pulse.timerPeriod;
         pulse.seqPos = static_cast<u8>((pulse.seqPos + 1) & 0x07);
-    } else --pulse.timer;
+    } else
+        --pulse.timer;
 }
 
 void APU::tickTriangleTimer() {
     if (state.triangle.timer == 0) {
         state.triangle.timer = state.triangle.timerPeriod;
         if (state.triangle.lenCnt > 0 && state.triangle.linearCnt > 0)
-            state.triangle.seqPos = static_cast<u8>((state.triangle.seqPos + 1) & 0x1F);
-    } else --state.triangle.timer;
+            state.triangle.seqPos =
+                static_cast<u8>((state.triangle.seqPos + 1) & 0x1F);
+    } else
+        --state.triangle.timer;
 }
 
 void APU::tickNoiseTimer() {
@@ -422,7 +442,8 @@ void APU::tickNoiseTimer() {
 
         state.noise.shiftReg >>= 1;
         state.noise.shiftReg |= static_cast<u16>(fb << 14);
-    } else --state.noise.timer;
+    } else
+        --state.noise.timer;
 }
 
 void APU::tickDmc() {
@@ -434,7 +455,8 @@ void APU::tickDmc() {
         return;
     }
 
-    state.dmc.timer = static_cast<u16>(DMC_TABLE[state.dmc.rateIndex & 0x0F] - 1);
+    state.dmc.timer =
+        static_cast<u16>(DMC_TABLE[state.dmc.rateIndex & 0x0F] - 1);
 
     if (state.dmc.bitsRemain == 0) {
         if (state.dmc.bufferEmpty) {
@@ -445,7 +467,8 @@ void APU::tickDmc() {
                 if (state.dmc.bytesRemain == 0 && !state.dmc.loop)
                     state.dmc.irqFlag = state.dmc.irqEnabled;
             } else if (state.dmc.loop) {
-                state.dmc.bytesRemain = static_cast<u16>(state.dmc.sampleLenReg) * 16 + 1;
+                state.dmc.bytesRemain =
+                    static_cast<u16>(state.dmc.sampleLenReg) * 16 + 1;
                 if (state.dmc.bytesRemain > 0) {
                     state.dmc.sampleBuffer = 0x00;
                     state.dmc.bufferEmpty = false;
@@ -468,9 +491,11 @@ void APU::tickDmc() {
     if (state.dmc.bitsRemain > 0) {
         const u8 bit = state.dmc.shiftReg & 0x01;
         if (bit) {
-            if (state.dmc.outLevel <= 125) state.dmc.outLevel += 2;
+            if (state.dmc.outLevel <= 125)
+                state.dmc.outLevel += 2;
         } else {
-            if (state.dmc.outLevel >= 2) state.dmc.outLevel -= 2;
+            if (state.dmc.outLevel >= 2)
+                state.dmc.outLevel -= 2;
         }
         state.dmc.shiftReg >>= 1;
         --state.dmc.bitsRemain;
@@ -484,7 +509,8 @@ void APU::tickDmc() {
             if (state.dmc.bytesRemain == 0 && !state.dmc.loop)
                 state.dmc.irqFlag = state.dmc.irqEnabled;
         } else if (state.dmc.loop) {
-            state.dmc.bytesRemain = static_cast<u16>(state.dmc.sampleLenReg) * 16 + 1;
+            state.dmc.bytesRemain =
+                static_cast<u16>(state.dmc.sampleLenReg) * 16 + 1;
             if (state.dmc.bytesRemain > 0) {
                 state.dmc.sampleBuffer = 0;
                 state.dmc.bufferEmpty = false;
@@ -493,19 +519,19 @@ void APU::tickDmc() {
         }
     }
 
-    state.dmc.active = (state.dmc.bytesRemain > 0)
-                    || (!state.dmc.bufferEmpty)
-                    || (state.dmc.bitsRemain > 0);
+    state.dmc.active = (state.dmc.bytesRemain > 0) ||
+                       (!state.dmc.bufferEmpty) || (state.dmc.bitsRemain > 0);
 }
 
-u8 APU::pulseOut(const Pulse& pulse, bool secondChannel) const {
+u8 APU::pulseOut(const Pulse &pulse, bool secondChannel) const {
     if (!pulse.enabled || pulse.lenCnt == 0)
         return 0;
     if (pulse.timerPeriod < 8)
         return 0;
 
     if (pulse.swpEnabled && pulse.swpShift > 0) {
-        const u16 change = static_cast<u16>(pulse.timerPeriod >> pulse.swpShift);
+        const u16 change =
+            static_cast<u16>(pulse.timerPeriod >> pulse.swpShift);
         u16 target = 0;
         if (pulse.swpNegate) {
             const u16 bias = secondChannel ? 0 : 1;
@@ -529,9 +555,12 @@ float APU::mixSample() const {
     const double n = static_cast<double>(noiseOut());
     const double d = static_cast<double>(dmcOut());
 
-    const double pulse = (p1 + p2 == 0.0) ? 0.0 : 95.88 / ((8128.0 / (p1 + p2)) + 100.0);
+    const double pulse =
+        (p1 + p2 == 0.0) ? 0.0 : 95.88 / ((8128.0 / (p1 + p2)) + 100.0);
     const double tndIn = (t / 8227.0) + (n / 12241.0) + (d / 22638.0);
     const double tnd = (tndIn == 0.0) ? 0.0 : 159.79 / ((1.0 / tndIn) + 100.0);
 
     return static_cast<float>(std::clamp(pulse + tnd, 0.0, 1.0));
 }
+
+} // namespace Core

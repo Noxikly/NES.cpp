@@ -4,8 +4,9 @@
 
 #include "common.hpp"
 
+namespace Core {
 class APU {
-public:
+  public:
     APU() = default;
     ~APU() = default;
 
@@ -17,7 +18,7 @@ public:
 
     void step(u32 cpuCycles);
 
-public:
+  public:
     struct Pulse {
         bool enabled{false};
 
@@ -96,11 +97,11 @@ public:
         bool active{false};
     };
 
-public:
+  public:
     double cyclesPerSample{NTSC_CYCLES};
     std::vector<float> samples{};
 
-public:
+  public:
     struct State {
         Pulse pulse1{};
         Pulse pulse2{};
@@ -123,40 +124,52 @@ public:
         double sampleAcc{0.0};
     };
 
-    const State& getState() const { return state; }
-    void loadState(const State& s) {
+    const State &getState() const { return state; }
+    void loadState(const State &s) {
         state = s;
         samples.clear();
     }
 
-private:
+  private:
     State state{};
 
-private:
+  private:
     void tickFrameCounter();
     void quarterFrame();
     void halfFrame();
 
-    static void clockEnvelope(bool lenHalt, u8 volPeriod, bool& startFlag, u8& div, u8& decay);
-    static void clockLengthCounter(bool halt, u8& lenCnt) { if (!halt && lenCnt > 0) --lenCnt; }
-    static void clockSweep(Pulse& pulse, bool secondChannel);
+    static void clockEnvelope(bool lenHalt, u8 volPeriod, bool &startFlag,
+                              u8 &div, u8 &decay);
+    static void clockLengthCounter(bool halt, u8 &lenCnt) {
+        if (!halt && lenCnt > 0)
+            --lenCnt;
+    }
+    static void clockSweep(Pulse &pulse, bool secondChannel);
 
-    void tickPulseTimer(Pulse& pulse);
+    void tickPulseTimer(Pulse &pulse);
     void tickTriangleTimer();
     void tickNoiseTimer();
     void tickDmc();
 
-private:
-    u8 pulseOut(const Pulse& pulse, bool secondChannel) const;
-    u8 triangleOut() const { if (!state.triangle.enabled 
-                                || state.triangle.lenCnt == 0 
-                                || state.triangle.linearCnt == 0)
-                                return 0;
-                             return TRIANGLE_TABLE[state.triangle.seqPos & 0x1F]; }
-    u8 noiseOut() const { if ((state.noise.shiftReg & 0x01) == 0) return 0;
-                          if (!state.noise.enabled || state.noise.lenCnt == 0) return 0;
-                          return state.noise.constVol ? state.noise.volPeriod : state.noise.envelDecay; }
+  private:
+    u8 pulseOut(const Pulse &pulse, bool secondChannel) const;
+    u8 triangleOut() const {
+        if (!state.triangle.enabled || state.triangle.lenCnt == 0 ||
+            state.triangle.linearCnt == 0)
+            return 0;
+        return TRIANGLE_TABLE[state.triangle.seqPos & 0x1F];
+    }
+    u8 noiseOut() const {
+        if ((state.noise.shiftReg & 0x01) == 0)
+            return 0;
+        if (!state.noise.enabled || state.noise.lenCnt == 0)
+            return 0;
+        return state.noise.constVol ? state.noise.volPeriod
+                                    : state.noise.envelDecay;
+    }
     u8 dmcOut() const { return state.dmc.outLevel; }
 
     float mixSample() const;
 };
+
+} /* namespace Core */
