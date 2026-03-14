@@ -30,7 +30,6 @@ class CPU {
         } regs;
 
         bool do_nmi{0};
-        bool nmi_delay{0};
         bool do_irq{0};
         u32 op_cycles{0};
         bool page_crossed{0};
@@ -46,8 +45,7 @@ class CPU {
       public:
         explicit C6502(CPU *p)
             : p(p), regs(p->state.regs), do_nmi(p->state.do_nmi),
-              nmi_delay(p->state.nmi_delay), do_irq(p->state.do_irq),
-              op_cycles(p->state.op_cycles),
+              do_irq(p->state.do_irq), op_cycles(p->state.op_cycles),
               page_crossed(p->state.page_crossed) {}
         ~C6502() = default;
 
@@ -88,7 +86,6 @@ class CPU {
       public:
         State::Regs &regs;
         bool &do_nmi;
-        bool &nmi_delay;
         bool &do_irq;
         u32 &op_cycles;
         bool &page_crossed;

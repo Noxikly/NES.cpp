@@ -32,6 +32,8 @@ class PPU {
         u16 pixel{0};
         u16 scanline{0};
         bool nmi{0};
+        bool nmiLine{0};
+        u8 nmiDelay{0};
         u8 mirrorMode{0};
         bool oddFrame{0};
         u8 openBus{0};
@@ -157,6 +159,9 @@ class PPU {
         inline bool renderDot() const {
             return (state.pixel >= 1 && state.pixel <= 256);
         }
+        inline bool fetchDot() const {
+            return renderDot() || (state.pixel >= 321 && state.pixel <= 336);
+        }
 
         u8 readVRAM(u16 addr) const;
         void writeVRAM(u16 addr, u8 data);
@@ -170,8 +175,8 @@ class PPU {
         void spriteTimingTick();
         void refreshOpenBus(u8 value, u8 mask = 0xFF);
         void tickOpenBusDecay();
-        void updateNmiState();
-        void incrementVRAMAddrOnAccess();
+        void updateNmiState(bool delayVblank = false);
+        void incrementVRAMAddr();
 
         inline u16 incrementX(u16 v) {
             return ((v & 0x001F) == 31)

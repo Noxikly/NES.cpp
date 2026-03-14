@@ -3,6 +3,8 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QDockWidget>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QFontDatabase>
 #include <QHBoxLayout>
@@ -10,8 +12,10 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPixmap>
 #include <QSlider>
+#include <QUrl>
 #include <QWidgetAction>
 
 #include "nes_state.hpp"
@@ -81,6 +85,7 @@ auto buildPttrn(const std::array<u8, 128 * 128> &pixels) -> QImage {
 WMain::WMain(const QString &romPath, QWidget *parent)
     : QMainWindow(parent), ui(std::make_unique<Ui::MainWindow>()) {
     ui->setupUi(this);
+    setAcceptDrops(true);
     setFocusPolicy(Qt::StrongFocus);
     setFocus(Qt::OtherFocusReason);
     ui->nesScreen->setFocusPolicy(Qt::NoFocus);
@@ -99,6 +104,48 @@ WMain::WMain(const QString &romPath, QWidget *parent)
 
 WMain::~WMain() = default;
 
+void WMain::dragEnterEvent(QDragEnterEvent *event) {
+    const QMimeData *mime = event->mimeData();
+    if (!mime || !mime->hasUrls()) {
+        QMainWindow::dragEnterEvent(event);
+        return;
+    }
+
+    for (const QUrl &url : mime->urls()) {
+        if (!url.isLocalFile())
+            continue;
+        const QString localPath = url.toLocalFile();
+        if (localPath.endsWith(".nes", Qt::CaseInsensitive)) {
+            event->acceptProposedAction();
+            return;
+        }
+    }
+
+    QMainWindow::dragEnterEvent(event);
+}
+
+void WMain::dropEvent(QDropEvent *event) {
+    const QMimeData *mime = event->mimeData();
+    if (!mime || !mime->hasUrls()) {
+        QMainWindow::dropEvent(event);
+        return;
+    }
+
+    for (const QUrl &url : mime->urls()) {
+        if (!url.isLocalFile())
+            continue;
+        const QString localPath = url.toLocalFile();
+        if (!localPath.endsWith(".nes", Qt::CaseInsensitive))
+            continue;
+
+        loadRom(localPath);
+        event->acceptProposedAction();
+        return;
+    }
+
+    QMainWindow::dropEvent(event);
+}
+
 void WMain::clearCore() {
     cpu.reset();
     apu.reset();
@@ -109,9 +156,16 @@ void WMain::clearCore() {
 
     joyState = 0;
     joyStateP2 = 0;
-    ppuCyclesDebt = 0.0;
+    ppuPhaseAcc = 0;
     romLoaded = 0;
     paused = 0;
+
+    if (ui) {
+        ui->nesScreen->setVisible(false);
+        if (auto *idle =
+                ui->centralwidget->findChild<QLabel *>("idleDropLabel"))
+            idle->setVisible(true);
+    }
 }
 
 u8 WMain::joyMaskKey(u32 key) {
@@ -130,9 +184,9 @@ u8 WMain::joyMaskKey(u32 key) {
     case Qt::Key_Shift:
         return 0x04;
     case Qt::Key_X:
-        return 0x02;
-    case Qt::Key_Z:
         return 0x01;
+    case Qt::Key_Z:
+        return 0x02;
     default:
         return 0;
     }
@@ -153,9 +207,9 @@ u8 WMain::joyMaskKeyP2(u32 key) {
     case Qt::Key_Shift:
         return 0x04;
     case Qt::Key_N:
-        return 0x02;
-    case Qt::Key_M:
         return 0x01;
+    case Qt::Key_M:
+        return 0x02;
     default:
         return 0;
     }
@@ -264,6 +318,19 @@ void WMain::stpMenuActions() {
             loadRom(path);
     });
 
+    connect(ui->actionClose_Game, &QAction::triggered, this, [this]() {
+        clearCore();
+        currRomPath.clear();
+
+        if (ui) {
+            ui->actionPause->setChecked(false);
+            ui->cpuDebugText->clear();
+            ui->ppuDebugText->clear();
+        }
+
+        updWindowTitle();
+    });
+
     connect(ui->actionLoad, &QAction::triggered, this, [this]() {
         if (!romLoaded || !cpu || !ppu || !apu || !mem || !mapper)
             return;
@@ -354,10 +421,18 @@ void WMain::stpMenuActions() {
     connect(ui->actionReset, &QAction::triggered, this, [this]() {
         if (cpu) {
             cpu->reset();
+            if (apu)
+                apu->reset();
+            if (mapper)
+                mapper->irqFlag = false;
+            if (ppu)
+                ppu->r.clearNmi();
+            ppuPhaseAcc = 0;
             joyState = 0;
             joyStateP2 = 0;
         }
     });
+    ui->actionReset->setAutoRepeat(false);
 
     connect(ui->actionReload, &QAction::triggered, this, [this]() {
         if (!currRomPath.isEmpty())
@@ -447,7 +522,7 @@ void WMain::loadRom(const QString &romPath) {
             std::make_unique<Core::Memory>(mapper.get(), ppu.get(), apu.get());
         cpu = std::make_unique<Core::CPU>(mem.get());
         cpu->reset();
-        ppuCyclesDebt = 0.0;
+        ppuPhaseAcc = 0;
 
         const u32 warmupScanlines =
             (emuRegion == Region::PAL || emuRegion == Region::DENDY) ? 312
@@ -462,6 +537,10 @@ void WMain::loadRom(const QString &romPath) {
         joyStateP2 = 0;
 
         ui->actionPause->setChecked(0);
+        ui->nesScreen->setVisible(true);
+        if (auto *idle =
+                ui->centralwidget->findChild<QLabel *>("idleDropLabel"))
+            idle->setVisible(false);
         ui->cpuDebugText->clear();
         ui->ppuDebugText->clear();
 
@@ -476,6 +555,10 @@ void WMain::loadRom(const QString &romPath) {
         paused = 0;
 
         ui->nesScreen->clear();
+        ui->nesScreen->setVisible(false);
+        if (auto *idle =
+                ui->centralwidget->findChild<QLabel *>("idleDropLabel"))
+            idle->setVisible(true);
         ui->cpuDebugText->clear();
         ui->ppuDebugText->clear();
         updWindowTitle();
@@ -494,7 +577,9 @@ void WMain::doFrame() {
     mem->setJoy2(joyStateP2);
 
     ppu->r.frameReady = 0;
-    const double ppuPerCpuRatio = ppuPerCpu();
+
+    const u32 ppuNum = (emuRegion == Region::PAL) ? 16u : 3u;
+    const u32 ppuDen = (emuRegion == Region::PAL) ? 5u : 1u;
     while (!ppu->r.frameReady) {
         cpu->exec();
 
@@ -503,24 +588,23 @@ void WMain::doFrame() {
             cycles = 1;
         }
 
-        ppuCyclesDebt += static_cast<double>(cycles) * ppuPerCpuRatio;
-        while (ppuCyclesDebt >= 1.0) {
-            ppu->r.step();
-            ppuCyclesDebt -= 1.0;
+        for (u32 c = 0; c < cycles; ++c) {
+            ppuPhaseAcc += ppuNum;
+            for (; ppuPhaseAcc >= ppuDen; ppuPhaseAcc -= ppuDen) {
+                ppu->r.step();
+
+                if (ppu->r.nmiPending()) {
+                    cpu->c.do_nmi = 1;
+                    ppu->r.clearNmi();
+                }
+            }
+
+            apu->step(1);
+
+            if (mapper->irqFlag || apu->getState().frameIrq ||
+                apu->getState().dmc.irqFlag)
+                cpu->c.do_irq = 1;
         }
-
-        if (mapper->irqFlag)
-            cpu->c.do_irq = 1;
-
-        if (apu->getState().frameIrq || apu->getState().dmc.irqFlag)
-            cpu->c.do_irq = 1;
-
-        if (ppu->r.nmiPending()) {
-            cpu->c.do_nmi = 1;
-            ppu->r.clearNmi();
-        }
-
-        apu->step(cycles);
     }
 
     if (audio && !apu->samples.empty()) {
@@ -533,7 +617,7 @@ void WMain::doFrame() {
 
 void WMain::applyRegion(Region region) {
     emuRegion = region;
-    ppuCyclesDebt = 0.0;
+    ppuPhaseAcc = 0;
 
     if (ui) {
         ui->actionRegion_PAL->setChecked(emuRegion == Region::PAL);
@@ -657,13 +741,42 @@ void WMain::updWindowTitle() {
 }
 
 void WMain::keyPressEvent(QKeyEvent *event) {
+    if (event->isAutoRepeat()) {
+        event->accept();
+        return;
+    }
+
     if (const u8 mask = joyMaskKey(event->key()); mask != 0) {
+        /* Противоположно-направленные кнопки
+         * не могут быть нажаты одновременно
+         */
+        if (mask == 0x80)
+            joyState &= static_cast<u8>(~0x40);
+        else if (mask == 0x40)
+            joyState &= static_cast<u8>(~0x80);
+        else if (mask == 0x20)
+            joyState &= static_cast<u8>(~0x10);
+        else if (mask == 0x10)
+            joyState &= static_cast<u8>(~0x20);
+
         joyState |= mask;
         event->accept();
         return;
     }
 
     if (const u8 mask = joyMaskKeyP2(event->key()); mask != 0) {
+        /* Противоположно-направленные кнопки
+         * не могут быть нажаты одновременно
+         */
+        if (mask == 0x80)
+            joyStateP2 &= static_cast<u8>(~0x40);
+        else if (mask == 0x40)
+            joyStateP2 &= static_cast<u8>(~0x80);
+        else if (mask == 0x20)
+            joyStateP2 &= static_cast<u8>(~0x10);
+        else if (mask == 0x10)
+            joyStateP2 &= static_cast<u8>(~0x20);
+
         joyStateP2 |= mask;
         event->accept();
         return;
@@ -673,6 +786,11 @@ void WMain::keyPressEvent(QKeyEvent *event) {
 }
 
 void WMain::keyReleaseEvent(QKeyEvent *event) {
+    if (event->isAutoRepeat()) {
+        event->accept();
+        return;
+    }
+
     if (const u8 mask = joyMaskKey(event->key()); mask != 0) {
         joyState &= static_cast<u8>(~mask);
         event->accept();

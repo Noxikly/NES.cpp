@@ -3,6 +3,12 @@
 #include <array>
 #include <cstdint>
 
+#ifdef _WIN32
+#define API_EXPORT extern "C" __declspec(dllexport)
+#else
+#define API_EXPORT extern "C"
+#endif
+
 using u8 = uint8_t;
 using u16 = uint16_t;
 using u32 = uint32_t;
@@ -15,6 +21,12 @@ enum Region : u8 {
     NTSC = 0,
     PAL = 1,
     DENDY = 2,
+};
+
+enum VecType : u8 {
+    VEC_PRG_ROM = 0,
+    VEC_PRG_RAM = 1,
+    VEC_CHR_ROM = 2,
 };
 
 /* For Memory */

@@ -21,7 +21,7 @@ u8 Memory::read(u16 addr) const {
                 value = ((state.joy1 & 0x01) | 0x40);
             } else {
                 value = ((state.joy1Shift & 0x01) | 0x40);
-                state.joy1Shift >>= 1;
+                state.joy1Shift = static_cast<u8>((state.joy1Shift >> 1) | 0x80);
             }
             return value;
         }
@@ -31,7 +31,7 @@ u8 Memory::read(u16 addr) const {
                 value = ((state.joy2 & 0x01) | 0x40);
             } else {
                 value = ((state.joy2Shift & 0x01) | 0x40);
-                state.joy2Shift >>= 1;
+                state.joy2Shift = static_cast<u8>((state.joy2Shift >> 1) | 0x80);
             }
             return value;
         }
@@ -94,8 +94,7 @@ void Memory::write(u16 addr, u8 value) {
                     ppu->writeReg(0x2004, data);
                 }
             }
-            addDma(state.dmaOdd ? 514 : 513);
-            state.dmaOdd = !state.dmaOdd;
+            addDma(state.dmaOdd ? 513 : 514);
             return;
         }
         case 0x4016: {

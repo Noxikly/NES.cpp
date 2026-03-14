@@ -18,7 +18,6 @@ void CPU::reset() {
                 static_cast<u16>(mem->read(0xFFFC));
     c.op_cycles = 7;
     c.do_nmi = 0;
-    c.nmi_delay = 0;
     c.do_irq = 0;
     c.page_crossed = 0;
     c.opEntry.op_name = "";
@@ -32,7 +31,7 @@ void CPU::C6502::nmi() {
     push(regs.P & ~B);
     set_flag(I, 1);
     regs.PC = read16(0xFFFA);
-    op_cycles = 8;
+    op_cycles = 7;
 }
 
 void CPU::C6502::irq() {
@@ -50,7 +49,7 @@ void CPU::C6502::step() {
 
     const auto it = OP_TABLE.find(opcode);
     if (it == OP_TABLE.end()) {
-        p->c.opEntry.op_name = "UNK";
+        p->c.opEntry.op_name = "???";
         p->c.opEntry.am = IMP;
         op_cycles = 2;
         page_crossed = 0;
@@ -115,28 +114,32 @@ void CPU::exec() {
 
     if (const u32 d = mem->getDma(); d != 0) {
         c.op_cycles = d;
+        for (u32 i = 0; i < d; ++i)
+            mem->tickCpuCycle();
         return;
     }
 
-    if (c.nmi_delay) {
-        c.nmi_delay = 0;
+    if (c.do_nmi) {
         c.do_nmi = 0;
         c.nmi();
+        for (u32 i = 0; i < c.op_cycles; ++i)
+            mem->tickCpuCycle();
         return;
     }
-
-    if (c.do_nmi)
-        c.nmi_delay = 1;
 
     if (c.do_irq) {
         c.do_irq = 0;
         if (!(c.regs.P & C6502::I)) {
             c.irq();
+            for (u32 i = 0; i < c.op_cycles; ++i)
+                mem->tickCpuCycle();
             return;
         }
     }
 
     c.step();
+    for (u32 i = 0; i < c.op_cycles; ++i)
+        mem->tickCpuCycle();
 }
 
 } // namespace Core

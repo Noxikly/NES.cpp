@@ -216,19 +216,6 @@ class Lua : public Cartridge {
 
 } // namespace Core
 
-/* API */
-#ifdef _WIN32
-#define API_EXPORT extern "C" __declspec(dllexport)
-#else
-#define API_EXPORT extern "C"
-#endif
-
-enum VecType : u8 {
-    VEC_PRG_ROM = 0,
-    VEC_PRG_RAM = 1,
-    VEC_CHR_ROM = 2,
-};
-
 API_EXPORT void Cartridge_resize(void *instance, u8 vecType, size_t size);
 API_EXPORT void Cartridge_setMirror(void *instance, u8 mode);
 API_EXPORT void Cartridge_triggerIRQ(void *instance);

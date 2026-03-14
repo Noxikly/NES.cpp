@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.22)
 project(nespp
-        VERSION 0.3.2
+        VERSION 0.3.4
         DESCRIPTION "A simple NES emulator"
         HOMEPAGE_URL "https://github.com/Noxikly/NES.cpp"
         LANGUAGES CXX)
@@ -8,15 +8,15 @@ project(nespp
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_CXX_FLAGS "-O2 -Wall -Wextra -Wpedantic")
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOUIC_SEARCH_PATHS ${CMAKE_CURRENT_SOURCE_DIR}/src/gui/forms)
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(LUAJIT REQUIRED luajit)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/CMakeModules")
+
+find_package(LuaJIT REQUIRED)
 
 # Core sources
 set(CORE_SOURCES
@@ -28,25 +28,31 @@ set(CORE_SOURCES
     src/core/ppu.cpp
 )
 
+set(GUI_SOURCES
+    src/main.cpp
+    src/gui/w_main.cpp
+    src/gui/nes_frame.cpp
+    src/gui/nes_audio.cpp
+    src/gui/forms/w_main.ui
+)
+
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(SOURCES
         ${CORE_SOURCES}
         tests/c6502.cpp
     )
 else()
-    find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets Multimedia)
+    find_package(Qt REQUIRED)
 
     set(SOURCES
         ${CORE_SOURCES}
-        src/main.cpp
-        src/gui/w_main.cpp
-        src/gui/nes_frame.cpp
-        src/gui/nes_audio.cpp
-        src/gui/forms/w_main.ui
+        ${GUI_SOURCES}
     )
 endif()
 
 add_executable(${PROJECT_NAME} ${SOURCES})
+
+target_compile_options(${PROJECT_NAME} PRIVATE -O2 -Wall -Wextra -Wpedantic)
 
 if(WIN32)
     target_link_options(${PROJECT_NAME} PRIVATE -Wl,--export-dynamic)
@@ -54,20 +60,16 @@ elseif(UNIX)
     target_link_options(${PROJECT_NAME} PRIVATE -rdynamic)
 endif()
 
-target_include_directories(${PROJECT_NAME} PRIVATE ${LUAJIT_INCLUDE_DIRS})
-target_link_directories(${PROJECT_NAME} PRIVATE ${LUAJIT_LIBRARY_DIRS})
-
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     find_package(GTest REQUIRED)
-    target_link_libraries(${PROJECT_NAME} PRIVATE GTest::gtest ${LUAJIT_LIBRARIES})
+    target_link_libraries(${PROJECT_NAME} PRIVATE GTest::gtest LuaJIT::LuaJIT)
 else()
-    target_link_libraries(${PROJECT_NAME} PRIVATE Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Multimedia ${LUAJIT_LIBRARIES})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${QT_LIBRARIES} LuaJIT::LuaJIT)
 endif()
 
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/android
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
     ${CMAKE_CURRENT_SOURCE_DIR}/src/gui
 )

@@ -14,35 +14,9 @@ void APU::powerUp() {
 }
 
 void APU::reset() {
-    state.frameCycle = 0;
-    state.irqInhibit = false;
-    state.frameIrq = false;
-    state.oddCycle = false;
-    state.frameCntDelay = 0;
-    state.pendQuarterFrame = false;
-    state.pendHalfFrame = false;
-    state.delayHalfFrame = false;
-    state.frameIrqRepeat = 0;
-
-    state.pulse1.enabled = false;
-    state.pulse2.enabled = false;
-    state.pulse1.lenCnt = 0;
-    state.pulse2.lenCnt = 0;
-
-    state.triangle.enabled = false;
-    state.triangle.lenCnt = 0;
-
-    state.noise.enabled = false;
-    state.noise.lenCnt = 0;
-
-    state.dmc.enabled = false;
-    state.dmc.active = false;
-    state.dmc.bytesRemain = 0;
-    state.dmc.bitsRemain = 0;
-    state.dmc.shiftReg = 0;
-    state.dmc.sampleBuffer = 0;
-    state.dmc.bufferEmpty = true;
-    state.dmc.irqFlag = false;
+    state = State{};
+    state.noise.timer = NOISE_TABLE[0];
+    state.noise.shiftReg = 1;
 
     samples.clear();
 }
@@ -194,16 +168,9 @@ void APU::writeReg(u16 addr, u8 value) {
             state.dmc.bufferEmpty = true;
         } else if (state.dmc.bytesRemain == 0) {
             state.dmc.active = true;
-            state.dmc.bytesRemain =
-                static_cast<u16>(state.dmc.sampleLenReg) * 16 + 1;
-
-            if (state.dmc.bufferEmpty && state.dmc.bytesRemain > 0) {
-                state.dmc.sampleBuffer = 0x00;
-                state.dmc.bufferEmpty = false;
-                --state.dmc.bytesRemain;
-                if (state.dmc.bytesRemain == 0 && !state.dmc.loop)
-                    state.dmc.irqFlag = state.dmc.irqEnabled;
-            }
+            reloadDmc();
+            if (state.dmc.bufferEmpty)
+                fetchDmc();
         }
         break;
     }
@@ -211,11 +178,9 @@ void APU::writeReg(u16 addr, u8 value) {
     case 0x4017:
         state.frameCntMode5 = (value & 0x80) != 0;
         state.irqInhibit = (value & 0x40) != 0;
-        if (state.irqInhibit) {
+        if (state.irqInhibit)
             state.frameIrq = false;
-            state.frameIrqRepeat = 0;
-        }
-        state.frameCntDelay = 3;
+        state.frameCntDelay = state.oddCycle ? 4 : 3;
         state.pendQuarterFrame = state.frameCntMode5;
         state.pendHalfFrame = state.frameCntMode5;
         break;
@@ -248,12 +213,6 @@ u8 APU::readStatus() {
 
 void APU::step(u32 cpuCycles) {
     for (u32 i = 0; i < cpuCycles; ++i) {
-        if (state.frameIrqRepeat > 0) {
-            if (!state.irqInhibit)
-                state.frameIrq = true;
-            --state.frameIrqRepeat;
-        }
-
         if (state.delayHalfFrame) {
             halfFrame();
             state.delayHalfFrame = false;
@@ -302,12 +261,12 @@ void APU::step(u32 cpuCycles) {
 
 void APU::tickFrameCounter() {
     switch (state.frameCycle) {
-    case 3729:
-    case 11186:
+    case 3728:
+    case 11185:
         quarterFrame();
         break;
 
-    case 7457:
+    case 7456:
         quarterFrame();
         state.delayHalfFrame = true;
         break;
@@ -317,19 +276,17 @@ void APU::tickFrameCounter() {
     }
 
     if (state.frameCntMode5) {
-        if (state.frameCycle == 18641) {
+        if (state.frameCycle == 18640) {
             quarterFrame();
             state.delayHalfFrame = true;
             state.frameCycle = 0;
         }
     } else {
-        if (state.frameCycle == 14915) {
+        if (state.frameCycle == 14914) {
             quarterFrame();
             state.delayHalfFrame = true;
-            if (!state.irqInhibit) {
+            if (!state.irqInhibit)
                 state.frameIrq = true;
-                state.frameIrqRepeat = 2;
-            }
             state.frameCycle = 0;
         }
     }
@@ -460,25 +417,15 @@ void APU::tickDmc() {
 
     if (state.dmc.bitsRemain == 0) {
         if (state.dmc.bufferEmpty) {
-            if (state.dmc.bytesRemain > 0) {
-                state.dmc.sampleBuffer = 0x00;
-                state.dmc.bufferEmpty = false;
-                --state.dmc.bytesRemain;
-                if (state.dmc.bytesRemain == 0 && !state.dmc.loop)
-                    state.dmc.irqFlag = state.dmc.irqEnabled;
-            } else if (state.dmc.loop) {
-                state.dmc.bytesRemain =
-                    static_cast<u16>(state.dmc.sampleLenReg) * 16 + 1;
-                if (state.dmc.bytesRemain > 0) {
-                    state.dmc.sampleBuffer = 0x00;
-                    state.dmc.bufferEmpty = false;
-                    --state.dmc.bytesRemain;
-                }
-            } else {
+            if (state.dmc.bytesRemain == 0 && state.dmc.loop)
+                reloadDmc();
+
+            if (state.dmc.bytesRemain == 0) {
                 state.dmc.active = false;
                 return;
             }
 
+            fetchDmc();
             if (state.dmc.bufferEmpty)
                 return;
         }
@@ -502,21 +449,10 @@ void APU::tickDmc() {
     }
 
     if (state.dmc.bufferEmpty) {
-        if (state.dmc.bytesRemain > 0) {
-            state.dmc.sampleBuffer = 0;
-            state.dmc.bufferEmpty = false;
-            --state.dmc.bytesRemain;
-            if (state.dmc.bytesRemain == 0 && !state.dmc.loop)
-                state.dmc.irqFlag = state.dmc.irqEnabled;
-        } else if (state.dmc.loop) {
-            state.dmc.bytesRemain =
-                static_cast<u16>(state.dmc.sampleLenReg) * 16 + 1;
-            if (state.dmc.bytesRemain > 0) {
-                state.dmc.sampleBuffer = 0;
-                state.dmc.bufferEmpty = false;
-                --state.dmc.bytesRemain;
-            }
-        }
+        if (state.dmc.bytesRemain == 0 && state.dmc.loop)
+            reloadDmc();
+        if (state.dmc.bytesRemain > 0)
+            fetchDmc();
     }
 
     state.dmc.active = (state.dmc.bytesRemain > 0) ||

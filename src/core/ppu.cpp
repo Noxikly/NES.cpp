@@ -14,11 +14,16 @@ u8 PPU::R2C02::readReg(u16 addr) {
     switch (addr) {
     /* 0x2002 PPUSTATUS */
     case 2: {
-        if (state.scanline == p->vblankScanline && state.pixel == 1)
+        const bool vblankWindow =
+            (state.scanline == p->vblankScanline && state.pixel == 0);
+        if (vblankWindow)
             state.suppressVblank = 1;
 
+        const u8 statusRead = static_cast<u8>(
+            vblankWindow ? (state.ppustatus & static_cast<u8>(~0x80))
+                         : state.ppustatus);
         const u8 ret =
-            static_cast<u8>((state.ppustatus & 0xE0) | (state.openBus & 0x1F));
+            static_cast<u8>((statusRead & 0xE0) | (state.openBus & 0x1F));
         state.ppustatus &= ~0x80;
         state.w = 0;
         updateNmiState();
@@ -41,8 +46,9 @@ u8 PPU::R2C02::readReg(u16 addr) {
         u8 val;
 
         if (a >= 0x3F00) {
-            /* Palette read: данные в младших 6 битах, старшие 2 бита от open
-             * bus */
+            /* Palette read: данные в младших 6 битах,
+             * старшие 2 бита от open bus
+             */
             val =
                 static_cast<u8>((readVRAM(a) & 0x3F) | (state.openBus & 0xC0));
             state.dataBuffer = readVRAM(a & 0x2FFF);
@@ -51,7 +57,7 @@ u8 PPU::R2C02::readReg(u16 addr) {
             state.dataBuffer = readVRAM(a);
         }
 
-        incrementVRAMAddrOnAccess();
+        incrementVRAMAddr();
         if (a >= 0x3F00)
             refreshOpenBus(val, 0x3F);
         else
@@ -79,8 +85,7 @@ void PPU::R2C02::writeReg(u16 addr, u8 data) {
 
         if (!prevNmiOutput && state.nmiOutput && (state.ppustatus & 0x80))
             state.nmi = 1;
-        else
-            updateNmiState();
+        updateNmiState(true);
         break;
     }
 
@@ -152,7 +157,7 @@ void PPU::R2C02::writeReg(u16 addr, u8 data) {
     /* 0x2007 PPUDATA: запись в VRAM по v + инкремент */
     case 7: {
         writeVRAM(state.v & 0x3FFF, data);
-        incrementVRAMAddrOnAccess();
+        incrementVRAMAddr();
         refreshOpenBus(data);
         break;
     }
@@ -165,6 +170,12 @@ void PPU::R2C02::writeReg(u16 addr, u8 data) {
 /* Один пиксельный тик PPU */
 void PPU::R2C02::step() {
     tickOpenBusDecay();
+
+    if (state.nmiDelay != 0) {
+        --state.nmiDelay;
+        if (state.nmiDelay == 0 && state.nmiLine)
+            state.nmi = 1;
+    }
 
     /* Рисуем только видимую область */
     if (visible() && renderDot())
@@ -181,8 +192,8 @@ void PPU::R2C02::step() {
         if (state.pixel == 257)
             reloadX();
 
-        if (preLine() && state.pixel >= 280 && state.pixel <= 304)
-            reloadY();
+        if (preLine() && state.pixel == 304 && rendering())
+            state.v = state.t;
     }
 
     /* Вход в VBlank: зависит от видеорежима */
@@ -190,7 +201,7 @@ void PPU::R2C02::step() {
         if (!state.suppressVblank)
             state.ppustatus |= 0x80;
         state.suppressVblank = 0;
-        updateNmiState();
+        updateNmiState(true);
         frameReady = 1;
     }
 
@@ -203,13 +214,9 @@ void PPU::R2C02::step() {
     }
 
     /* Пропуск одного dot на нечет кадре (только NTSC) */
-    if (p->oddFrameDotSkip && preLine() && state.pixel == 339 && rendering() &&
+    if (p->oddFrameDotSkip && state.pixel == 339 && preLine() && rendering() &&
         state.oddFrame)
         state.pixel = 340;
-
-    /* Тактируем mapper (MMC3 IRQ и т.п.) */
-    if (p->mapper && state.pixel == 260 && renderLine() && rendering())
-        p->mapper->step();
 
     /* Переход на следующий dot / scanline / frame */
     if (++state.pixel > 340) {
@@ -221,11 +228,29 @@ void PPU::R2C02::step() {
     }
 }
 
-void PPU::R2C02::updateNmiState() {
-    state.nmi = state.nmiOutput && ((state.ppustatus & 0x80) != 0);
+void PPU::R2C02::updateNmiState(bool delayVblank) {
+    const bool newNmi = state.nmiOutput && ((state.ppustatus & 0x80) != 0);
+    const bool ris = !state.nmiLine && newNmi;
+    state.nmiLine = newNmi;
+
+    if (!newNmi) {
+        state.nmiDelay = 0;
+        return;
+    }
+
+    if (!ris)
+        return;
+
+    if (delayVblank) {
+        state.nmiDelay = 20;
+        return;
+    }
+
+    state.nmiDelay = 0;
+    state.nmi = 1;
 }
 
-void PPU::R2C02::incrementVRAMAddrOnAccess() {
+void PPU::R2C02::incrementVRAMAddr() {
     if (rendering() && renderLine()) {
         state.v = incrementX(state.v);
         incrementY();
@@ -368,6 +393,9 @@ void PPU::R2C02::spriteTimingTick() {
         const u8 slot = static_cast<u8>((state.pixel - 257) >> 3);
         const u8 phase = static_cast<u8>((state.pixel - 257) & 0x07);
 
+        if (p->mapper && visible() && rendering() && slot == 2 && phase == 2)
+            p->mapper->step();
+
         if (slot < state.spriteCount) {
             auto &entry = state.OAM[slot];
             const u16 height = (state.ppuctrl & 0x20) ? 16 : 8;
@@ -391,10 +419,11 @@ void PPU::R2C02::spriteTimingTick() {
                     patAddr = static_cast<u16>(bank + entry.tile * 16 + fineY);
                 }
 
-                if (phase == 4)
+                if (phase == 4) {
                     entry.low = readVRAM(patAddr);
-                else
+                } else {
                     entry.high = readVRAM(static_cast<u16>(patAddr + 8));
+                }
             }
         }
     }
@@ -483,13 +512,10 @@ void PPU::R2C02::renderPixel() {
     if (x < 8 && !(state.ppumask & 0x04))
         sprite0 = 0;
 
-    if (rendering()) {
-        const bool hitBySpec = sprite0 && bgPixel != 0 && fgPixel != 0;
-        const bool hitByRopeFallback =
-            sprite0 && bgPixel == 0 && fgPixel != 0 &&
-            (state.ppumask & 0x18) == 0x18 && state.scanline == 30 && x >= 252;
+    if ((state.ppumask & 0x18) == 0x18) {
+        const bool hitBySpec = sprite0 && fgPixel != 0;
 
-        if ((hitBySpec || hitByRopeFallback) && x < 255)
+        if (hitBySpec && x < 255)
             state.ppustatus |= 0x40;
     }
 

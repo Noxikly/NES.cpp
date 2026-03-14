@@ -45,6 +45,7 @@ class Memory {
         state.dma = 0;
         return d;
     }
+    void tickCpuCycle() { state.dmaOdd = !state.dmaOdd; }
 
   public:
     Mapper *mapper{nullptr};

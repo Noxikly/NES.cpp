@@ -119,7 +119,6 @@ class APU {
         bool pendQuarterFrame{false};
         bool pendHalfFrame{false};
         bool delayHalfFrame{false};
-        u8 frameIrqRepeat{0};
 
         double sampleAcc{0.0};
     };
@@ -137,6 +136,21 @@ class APU {
     void tickFrameCounter();
     void quarterFrame();
     void halfFrame();
+    inline void reloadDmc() {
+        state.dmc.bytesRemain =
+            static_cast<u16>(state.dmc.sampleLenReg) * 16 + 1;
+    }
+    inline void fetchDmc() {
+        if (state.dmc.bytesRemain == 0)
+            return;
+
+        state.dmc.sampleBuffer = 0x00;
+        state.dmc.bufferEmpty = false;
+        --state.dmc.bytesRemain;
+
+        if (state.dmc.bytesRemain == 0 && !state.dmc.loop)
+            state.dmc.irqFlag = state.dmc.irqEnabled;
+    }
 
     static void clockEnvelope(bool lenHalt, u8 volPeriod, bool &startFlag,
                               u8 &div, u8 &decay);

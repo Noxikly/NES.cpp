@@ -29,6 +29,8 @@ class WMain : public QMainWindow {
     ~WMain() override;
 
   protected:
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void keyReleaseEvent(QKeyEvent *event) override;
 
@@ -70,7 +72,7 @@ class WMain : public QMainWindow {
     u8 joyStateP2{0};
 
     Region emuRegion{Region::NTSC};
-    double ppuCyclesDebt{0.0};
+    u32 ppuPhaseAcc{0};
 
     bool romLoaded{false};
     bool paused{false};

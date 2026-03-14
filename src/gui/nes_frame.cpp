@@ -5,6 +5,8 @@
 NESFrame::NESFrame(QWidget *parent)
     : QFrame(parent), frameImage(WIDTH, HEIGHT, QImage::Format_ARGB32) {
     setFrameStyle(QFrame::NoFrame);
+    setAttribute(Qt::WA_TranslucentBackground, true);
+    setAutoFillBackground(false);
     clear();
 }
 
@@ -16,7 +18,7 @@ void NESFrame::setFrameBuffer(
 
 void NESFrame::clear() {
     frameData = nullptr;
-    frameImage.fill(Qt::black);
+    frameImage.fill(Qt::transparent);
     update();
 }
 
@@ -25,7 +27,6 @@ void NESFrame::paintEvent(QPaintEvent *event) {
 
     QPainter painter(this);
     painter.setRenderHint(QPainter::SmoothPixmapTransform, false);
-    painter.fillRect(rect(), Qt::black);
 
     if (frameData) {
         const QImage frameView(
@@ -35,5 +36,6 @@ void NESFrame::paintEvent(QPaintEvent *event) {
         return;
     }
 
-    painter.drawImage(rect(), frameImage);
+    painter.setCompositionMode(QPainter::CompositionMode_Source);
+    painter.fillRect(rect(), Qt::transparent);
 }
