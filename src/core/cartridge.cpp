@@ -1,8 +1,6 @@
-#include "cartridge.hpp"
-
 #include <fstream>
-#include <ios>
-#include <stdexcept>
+
+#include "core/cartridge.h"
 
 namespace Core {
 
@@ -44,4 +42,4 @@ void Cartridge::loadNES(const std::filesystem::path &path) {
     }
 }
 
-} // namespace Core
+} /* namespace Core */

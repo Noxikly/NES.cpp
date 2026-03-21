@@ -1,9 +1,8 @@
 #include <algorithm>
-#include <array>
-#include <vector>
 
-#include "apu.hpp"
-#include "common.hpp"
+#include "common/debug.h"
+
+#include "core/apu.h"
 
 namespace Core {
 
@@ -22,6 +21,10 @@ void APU::reset() {
 }
 
 void APU::writeReg(u16 addr, u8 value) {
+    if (debug)
+        LOG_TRACE("[APU] writeReg addr=0x%04X value=0x%02X",
+                  static_cast<unsigned>(addr), static_cast<unsigned>(value));
+
     switch (addr) {
     case 0x4000:
         state.pulse1.duty = (value >> 6) & 0x03;
@@ -35,6 +38,7 @@ void APU::writeReg(u16 addr, u8 value) {
         state.pulse1.swpPeriod = (value >> 4) & 0x07;
         state.pulse1.swpNegate = (value & 0x08) != 0;
         state.pulse1.swpShift = value & 0x07;
+        state.pulse1.swpDiv = state.pulse1.swpPeriod;
         state.pulse1.swpReload = true;
         break;
 
@@ -65,6 +69,7 @@ void APU::writeReg(u16 addr, u8 value) {
         state.pulse2.swpPeriod = (value >> 4) & 0x07;
         state.pulse2.swpNegate = (value & 0x08) != 0;
         state.pulse2.swpShift = value & 0x07;
+        state.pulse2.swpDiv = state.pulse2.swpPeriod;
         state.pulse2.swpReload = true;
         break;
 
@@ -111,6 +116,7 @@ void APU::writeReg(u16 addr, u8 value) {
     case 0x400E:
         state.noise.mode = (value & 0x80) != 0;
         state.noise.periodIndex = value & 0x0F;
+        state.noise.timer = NOISE_TABLE[state.noise.periodIndex & 0x0F];
         break;
 
     case 0x400F:
@@ -124,6 +130,7 @@ void APU::writeReg(u16 addr, u8 value) {
         state.dmc.irqEnabled = (value & 0x80) != 0;
         state.dmc.loop = (value & 0x40) != 0;
         state.dmc.rateIndex = value & 0x0F;
+        state.dmc.timer = static_cast<u16>(DMC_TABLE[state.dmc.rateIndex & 0x0F] - 1);
         if (!state.dmc.irqEnabled) {
             state.dmc.irqFlag = false;
         }
@@ -183,6 +190,7 @@ void APU::writeReg(u16 addr, u8 value) {
         state.frameCntDelay = state.oddCycle ? 4 : 3;
         state.pendQuarterFrame = state.frameCntMode5;
         state.pendHalfFrame = state.frameCntMode5;
+        state.frameCycle = 0;
         break;
 
     default:
@@ -208,6 +216,8 @@ u8 APU::readStatus() {
         status |= 0x80;
 
     state.frameIrq = false;
+    if (debug)
+        LOG_TRACE("[APU] readStatus -> 0x%02X", static_cast<unsigned>(status));
     return status;
 }
 
@@ -352,13 +362,15 @@ void APU::clockSweep(Pulse &pulse, bool secondChannel) {
         if (doSweep) {
             const u16 change =
                 static_cast<u16>(pulse.timerPeriod >> pulse.swpShift);
+            u16 target = pulse.timerPeriod;
             if (pulse.swpNegate) {
                 const u16 bias = secondChannel ? 0 : 1;
-                pulse.timerPeriod =
-                    static_cast<u16>(pulse.timerPeriod - change - bias);
+                target = static_cast<u16>(pulse.timerPeriod - change - bias);
             } else
-                pulse.timerPeriod =
-                    static_cast<u16>(pulse.timerPeriod + change);
+                target = static_cast<u16>(pulse.timerPeriod + change);
+
+            if (target <= 0x07FF)
+                pulse.timerPeriod = target;
         }
         pulse.swpDiv = pulse.swpPeriod;
     } else
@@ -484,19 +496,19 @@ u8 APU::pulseOut(const Pulse &pulse, bool secondChannel) const {
     return pulse.constVol ? pulse.volPeriod : pulse.envelDecay;
 }
 
-float APU::mixSample() const {
-    const double p1 = static_cast<double>(pulseOut(state.pulse1, false));
-    const double p2 = static_cast<double>(pulseOut(state.pulse2, true));
-    const double t = static_cast<double>(triangleOut());
-    const double n = static_cast<double>(noiseOut());
-    const double d = static_cast<double>(dmcOut());
+f32 APU::mixSample() const {
+    const f64 p1 = static_cast<f64>(pulseOut(state.pulse1, false));
+    const f64 p2 = static_cast<f64>(pulseOut(state.pulse2, true));
+    const f64 t = static_cast<f64>(triangleOut());
+    const f64 n = static_cast<f64>(noiseOut());
+    const f64 d = static_cast<f64>(dmcOut());
 
-    const double pulse =
+    const f64 pulse =
         (p1 + p2 == 0.0) ? 0.0 : 95.88 / ((8128.0 / (p1 + p2)) + 100.0);
-    const double tndIn = (t / 8227.0) + (n / 12241.0) + (d / 22638.0);
-    const double tnd = (tndIn == 0.0) ? 0.0 : 159.79 / ((1.0 / tndIn) + 100.0);
+    const f64 tndIn = (t / 8227.0) + (n / 12241.0) + (d / 22638.0);
+    const f64 tnd = (tndIn == 0.0) ? 0.0 : 159.79 / ((1.0 / tndIn) + 100.0);
 
-    return static_cast<float>(std::clamp(pulse + tnd, 0.0, 1.0));
+    return static_cast<f32>(std::clamp(pulse + tnd, 0.0, 1.0));
 }
 
-} // namespace Core
+} /* namespace Core */

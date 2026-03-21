@@ -4,17 +4,17 @@
 #include <filesystem>
 #include <vector>
 
-#include "common.hpp"
+#include "common/types.h"
 
 namespace Core {
 class Cartridge {
-  public:
+public:
     explicit Cartridge() = default;
     ~Cartridge() = default;
 
     void loadNES(const std::filesystem::path &path);
 
-  public:
+public:
     enum MirrorMode : u8 {
         HORIZONTAL = 0,  /* [A,A,B,B] */
         VERTICAL = 1,    /* [A,B,A,B] */
@@ -47,7 +47,7 @@ class Cartridge {
 
     } fmt{};
 
-  public:
+public:
     std::vector<u8> PRG_ROM; /* Program ROM (код)       */
     std::vector<u8> PRG_RAM{std::vector<u8>(0x2000)}; /* SRAM */
     std::vector<u8> CHR_ROM; /* Character ROM (спрайты) */

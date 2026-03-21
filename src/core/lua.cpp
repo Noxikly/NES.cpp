@@ -1,8 +1,9 @@
 #include <stddef.h>
 
-#include "cartridge.hpp"
-#include "common.hpp"
-#include "lua.hpp"
+#include "common/types.h"
+
+#include "core/cartridge.h"
+#include "core/lua.h"
 
 namespace Core {
 
@@ -10,13 +11,13 @@ API_EXPORT void Cartridge_resize(void *instance, u8 vecType, size_t size) {
     auto *cart = static_cast<Core::Cartridge *>(instance);
 
     switch (vecType) {
-    case VEC_PRG_ROM:
+    case 0: /* VEC_PRG_ROM */
         cart->PRG_ROM.resize(size);
         break;
-    case VEC_PRG_RAM:
+    case 1: /* VEC_PRG_RAM */
         cart->PRG_RAM.resize(size);
         break;
-    case VEC_CHR_ROM:
+    case 2: /* VEC_CHR_ROM */
         cart->CHR_ROM.resize(size);
         break;
     default:

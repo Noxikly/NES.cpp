@@ -2,25 +2,37 @@
 
 #include <array>
 
-#include "common.hpp"
-#include "mapper.hpp"
-#include "ppu.hpp"
+#include "common/error.h"
+
+#include "core/mapper.h"
+#include "core/ppu.h"
 
 namespace Core {
 class APU;
 
 class Memory {
-  public:
-    explicit Memory(Mapper *m = nullptr, PPU *p = nullptr, APU *a = nullptr)
+public:
+/* constants */
+static inline constexpr u16 MIRROR = 0x07FF;
+static inline constexpr u16 STACK = 0x0100;
+
+
+public:
+    explicit Memory(Mapper *m = nullptr, 
+                    PPU *p = nullptr, 
+                    APU *a = nullptr)
         : mapper(m), ppu(p), apu(a) {
         state.ram.fill(0);
     }
     ~Memory() = default;
 
-    u8 read(u16 addr) const;
-    void write(u16 addr, u8 value);
+    Common::Error::Result<u8> read(u16 addr) const;
+    Common::Error::Status write(u16 addr, u8 value);
 
-  public:
+public:
+    bool debug{false};
+
+public:
     struct State {
         std::array<u8, 2048> ram{}; /* 0x0000-0x07FF */
         u32 dma{0};
@@ -35,7 +47,7 @@ class Memory {
     const State &getState() const { return state; }
     void loadState(const State &s) { state = s; }
 
-  public:
+public:
     void setJoy1(u8 s) { state.joy1 = s; }
     void setJoy2(u8 s) { state.joy2 = s; }
 
@@ -47,11 +59,11 @@ class Memory {
     }
     void tickCpuCycle() { state.dmaOdd = !state.dmaOdd; }
 
-  public:
+public:
     Mapper *mapper{nullptr};
     PPU *ppu{nullptr};
     APU *apu{nullptr};
-    mutable State state;
+    mutable State state{};
 };
 
-} // namespace Core
+} /* namespace Core */

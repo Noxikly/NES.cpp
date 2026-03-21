@@ -1,7 +1,8 @@
 #include <unordered_map>
 
-#include "common.hpp"
-#include "cpu.hpp"
+#include "common/types.h"
+
+#include "core/cpu.h"
 
 namespace Core {
 
@@ -11,30 +12,30 @@ namespace Core {
 
 /* LDA: M -> A */
 inline void CPU::C6502::LDA(u16 addr) {
-    regs.A = p->mem->read(addr);
+    regs.A = p->memRead(addr);
     set_nz(regs.A);
 }
 
 /* STA: A -> M */
-inline void CPU::C6502::STA(u16 addr) { p->mem->write(addr, regs.A); }
+inline void CPU::C6502::STA(u16 addr) { p->memWrite(addr, regs.A); }
 
 /* LDX: M -> X */
 inline void CPU::C6502::LDX(u16 addr) {
-    regs.X = p->mem->read(addr);
+    regs.X = p->memRead(addr);
     set_nz(regs.X);
 }
 
 /* STX: X -> M */
-inline void CPU::C6502::STX(u16 addr) { p->mem->write(addr, regs.X); }
+inline void CPU::C6502::STX(u16 addr) { p->memWrite(addr, regs.X); }
 
 /* LDY: M -> Y */
 inline void CPU::C6502::LDY(u16 addr) {
-    regs.Y = p->mem->read(addr);
+    regs.Y = p->memRead(addr);
     set_nz(regs.Y);
 }
 
 /* STY: Y -> M */
-inline void CPU::C6502::STY(u16 addr) { p->mem->write(addr, regs.Y); }
+inline void CPU::C6502::STY(u16 addr) { p->memWrite(addr, regs.Y); }
 
 /* Операции передачи */
 
@@ -83,30 +84,30 @@ inline void CPU::C6502::ArithmWithCarry(const u16 val) {
 
 /* ADC: A += M + C */
 inline void CPU::C6502::ADC(u16 addr) {
-    const u16 val = p->mem->read(addr);
+    const u16 val = p->memRead(addr);
     ArithmWithCarry(val);
 }
 
 /* SBC: A += -M + C */
 inline void CPU::C6502::SBC(u16 addr) {
-    const u16 val = p->mem->read(addr) ^ 0x00FF; /* -M */
+    const u16 val = p->memRead(addr) ^ 0x00FF; /* -M */
     ArithmWithCarry(val);
 }
 
 /* INC: M + 1 -> M */
 inline void CPU::C6502::INC(u16 addr) {
-    u8 val = p->mem->read(addr);
+    u8 val = p->memRead(addr);
     val++;
     set_nz(val);
-    p->mem->write(addr, val);
+    p->memWrite(addr, val);
 }
 
 /* INC: M - 1 -> M */
 inline void CPU::C6502::DEC(u16 addr) {
-    u8 val = p->mem->read(addr);
+    u8 val = p->memRead(addr);
     val--;
     set_nz(val);
-    p->mem->write(addr, val);
+    p->memWrite(addr, val);
 }
 
 /* INX: X + 1 -> X */
@@ -126,7 +127,7 @@ inline void CPU::C6502::DEY() { set_nz(--regs.Y); }
 /* ASL: C <- [A или M] <- 0 */
 inline void CPU::C6502::ASL(u16 addr) {
     const bool cond = p->c.opEntry.am == C6502::IMP;
-    const u8 val = (cond) ? regs.A : p->mem->read(addr);
+    const u8 val = (cond) ? regs.A : p->memRead(addr);
     const u16 tmp = static_cast<u16>(val << 1);
 
     set_flag(C, (tmp & 0xFF00) > 0);
@@ -136,13 +137,13 @@ inline void CPU::C6502::ASL(u16 addr) {
     if (cond)
         regs.A = tmp & 0x00FF;
     else
-        p->mem->write(addr, tmp & 0x00FF);
+        p->memWrite(addr, tmp & 0x00FF);
 }
 
 /* LSR: 0 -> [A или M] -> C */
 inline void CPU::C6502::LSR(u16 addr) {
     const bool cond = p->c.opEntry.am == C6502::IMP;
-    const u8 val = (cond) ? regs.A : p->mem->read(addr);
+    const u8 val = (cond) ? regs.A : p->memRead(addr);
     const u16 tmp = val >> 1;
 
     set_flag(C, val & 0x0001);
@@ -151,13 +152,13 @@ inline void CPU::C6502::LSR(u16 addr) {
     if (cond)
         regs.A = tmp & 0x00FF;
     else
-        p->mem->write(addr, tmp & 0x00FF);
+        p->memWrite(addr, tmp & 0x00FF);
 }
 
 /* ROL: C <- [76543210] <- C */
 inline void CPU::C6502::ROL(u16 addr) {
     const bool cond = p->c.opEntry.am == C6502::IMP;
-    const u8 val = (cond) ? regs.A : p->mem->read(addr);
+    const u8 val = (cond) ? regs.A : p->memRead(addr);
     const u16 tmp = static_cast<u16>(val << 1) | (regs.P & C);
 
     set_flag(C, tmp & 0xFF00);
@@ -166,13 +167,13 @@ inline void CPU::C6502::ROL(u16 addr) {
     if (cond)
         regs.A = tmp & 0x00FF;
     else
-        p->mem->write(addr, tmp & 0x00FF);
+        p->memWrite(addr, tmp & 0x00FF);
 }
 
 /* ROR: C -> [76543210] -> C */
 inline void CPU::C6502::ROR(u16 addr) {
     const bool cond = p->c.opEntry.am == C6502::IMP;
-    const u8 val = (cond) ? regs.A : p->mem->read(addr);
+    const u8 val = (cond) ? regs.A : p->memRead(addr);
     const u16 tmp = static_cast<u16>((regs.P & C) << 7) | (val >> 1);
 
     set_flag(C, val & 0x01);
@@ -181,32 +182,32 @@ inline void CPU::C6502::ROR(u16 addr) {
     if (cond)
         regs.A = tmp & 0x00FF;
     else
-        p->mem->write(addr, tmp & 0x00FF);
+        p->memWrite(addr, tmp & 0x00FF);
 }
 
 /* Логические операции */
 
 /* AND: A = A & M */
 inline void CPU::C6502::AND(u16 addr) {
-    regs.A &= p->mem->read(addr);
+    regs.A &= p->memRead(addr);
     set_nz(regs.A);
 }
 
 /* ORA: A = A | memory */
 inline void CPU::C6502::ORA(u16 addr) {
-    regs.A |= p->mem->read(addr);
+    regs.A |= p->memRead(addr);
     set_nz(regs.A);
 }
 
 /* EOR: A = A ^ memory */
 inline void CPU::C6502::EOR(u16 addr) {
-    regs.A ^= p->mem->read(addr);
+    regs.A ^= p->memRead(addr);
     set_nz(regs.A);
 }
 
 /* BIT: A & M */
 inline void CPU::C6502::BIT(u16 addr) {
-    const u8 val = p->mem->read(addr);
+    const u8 val = p->memRead(addr);
     set_flag(Z, (regs.A & val & 0x00FF) == 0);
     set_flag(N, val & N);
     set_flag(V, val & V);
@@ -216,7 +217,7 @@ inline void CPU::C6502::BIT(u16 addr) {
 
 /* CMP: A - M */
 inline void CPU::C6502::CMP(u16 addr) {
-    const u8 val = p->mem->read(addr);
+    const u8 val = p->memRead(addr);
     const u16 tmp = static_cast<u16>(regs.A) - static_cast<u16>(val);
     set_flag(C, regs.A >= val);
     set_nz16(tmp);
@@ -224,7 +225,7 @@ inline void CPU::C6502::CMP(u16 addr) {
 
 /* CPX: X - M */
 inline void CPU::C6502::CPX(u16 addr) {
-    const u8 val = p->mem->read(addr);
+    const u8 val = p->memRead(addr);
     const u16 tmp = static_cast<u16>(regs.X) - static_cast<u16>(val);
     set_flag(C, regs.X >= val);
     set_nz16(tmp);
@@ -232,7 +233,7 @@ inline void CPU::C6502::CPX(u16 addr) {
 
 /* CPY: Y - M */
 inline void CPU::C6502::CPY(u16 addr) {
-    const u8 val = p->mem->read(addr);
+    const u8 val = p->memRead(addr);
     const u16 tmp = static_cast<u16>(regs.Y) - static_cast<u16>(val);
     set_flag(C, regs.Y >= val);
     set_nz16(tmp);
@@ -414,7 +415,7 @@ inline void CPU::C6502::ANC(u16 addr) {
 }
 
 inline void CPU::C6502::ANE(u16 addr) {
-    regs.A = static_cast<u8>((regs.A | CONSTANT) & regs.X & p->mem->read(addr));
+    regs.A = static_cast<u8>((regs.A | CPU::CONSTANT) & regs.X & p->memRead(addr));
     set_nz(regs.A);
 }
 
@@ -434,7 +435,7 @@ inline void CPU::C6502::ISC(u16 addr) {
 }
 
 inline void CPU::C6502::LAS(u16 addr) {
-    const u8 val = static_cast<u8>(regs.SP & p->mem->read(addr));
+    const u8 val = static_cast<u8>(regs.SP & p->memRead(addr));
     regs.X = val;
     regs.A = val;
     regs.SP = val;
@@ -442,13 +443,13 @@ inline void CPU::C6502::LAS(u16 addr) {
 }
 
 inline void CPU::C6502::LAX(u16 addr) {
-    regs.A = p->mem->read(addr);
+    regs.A = p->memRead(addr);
     regs.X = regs.A;
     set_nz(regs.A);
 }
 
 inline void CPU::C6502::LXA(u16 addr) {
-    const u8 val = static_cast<u8>((regs.A | CONSTANT) & p->mem->read(addr));
+    const u8 val = static_cast<u8>((regs.A | CONSTANT) & p->memRead(addr));
     regs.A = val;
     regs.X = val;
     set_nz(val);
@@ -465,11 +466,11 @@ inline void CPU::C6502::RRA(u16 addr) {
 }
 
 inline void CPU::C6502::SAX(u16 addr) {
-    p->mem->write(addr, static_cast<u8>(regs.A & regs.X));
+    p->memWrite(addr, static_cast<u8>(regs.A & regs.X));
 }
 
 inline void CPU::C6502::SBX(u16 addr) {
-    const u8 val = p->mem->read(addr);
+    const u8 val = p->memRead(addr);
     const u8 ax = static_cast<u8>(regs.A & regs.X);
     const u16 tmp = static_cast<u16>(ax) - static_cast<u16>(val);
     set_flag(C, ax >= val);
@@ -481,21 +482,21 @@ inline void CPU::C6502::SHA(u16 addr) {
     u8 h = static_cast<u8>((addr >> 8) + 1);
     if (((addr & 0x00FF) + regs.Y) >= 0x0100)
         h--;
-    p->mem->write(addr, static_cast<u8>(regs.A & regs.X & h));
+    p->memWrite(addr, static_cast<u8>(regs.A & regs.X & h));
 }
 
 inline void CPU::C6502::SHX(u16 addr) {
     u8 h = static_cast<u8>((addr >> 8) + 1);
     if (((addr & 0x00FF) + regs.Y) >= 0x0100)
         h--;
-    p->mem->write(addr, static_cast<u8>(regs.X & h));
+    p->memWrite(addr, static_cast<u8>(regs.X & h));
 }
 
 inline void CPU::C6502::SHY(u16 addr) {
     u8 h = static_cast<u8>((addr >> 8) + 1);
     if (((addr & 0x00FF) + regs.X) >= 0x0100)
         h--;
-    p->mem->write(addr, static_cast<u8>(regs.Y & h));
+    p->memWrite(addr, static_cast<u8>(regs.Y & h));
 }
 
 inline void CPU::C6502::SLO(u16 addr) {
@@ -513,14 +514,14 @@ inline void CPU::C6502::TAS(u16 addr) {
     u8 h = static_cast<u8>((addr >> 8) + 1);
     if (((addr & 0x00FF) + regs.Y) >= 0x0100)
         h--;
-    p->mem->write(addr, static_cast<u8>(regs.SP & h));
+    p->memWrite(addr, static_cast<u8>(regs.SP & h));
 }
 
 inline void CPU::C6502::USBC(u16 addr) { SBC(addr); }
 
 inline void CPU::C6502::KIL(u16 /*addr*/) { regs.PC--; }
 
-inline void CPU::C6502::NOP_IGN(u16 addr) { (void)p->mem->read(addr); }
+inline void CPU::C6502::NOP_IGN(u16 addr) { (void)p->memRead(addr); }
 
 /* Таблица опкодов (opcode, функция, адресация, такты) */
 inline const std::unordered_map<u16, CPU::C6502::OpEntry> CPU::C6502::OP_TABLE =
@@ -875,4 +876,4 @@ inline const std::unordered_map<u16, CPU::C6502::OpEntry> CPU::C6502::OP_TABLE =
         {0xFC, {"NOP", ABSX, 4, &C6502::NOP_IGN, nullptr, 1}},
 };
 
-} // namespace Core
+} /* namespace Core */

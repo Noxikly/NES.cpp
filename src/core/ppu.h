@@ -2,21 +2,53 @@
 
 #include <array>
 
-#include "common.hpp"
+#include "common/types.h"
 
 namespace Core {
 class Mapper;
 
 class PPU {
-  public:
+public:
+/* constants */
+static constexpr u16 WIDTH = 256;
+static constexpr u16 HEIGHT = 240;
+
+static constexpr u32 OPENBUS_DECAY_TICKS_NTSC = 5369318;
+static constexpr u32 OPENBUS_DECAY_TICKS_PAL = 5320342;
+
+enum class Region : u8 
+{
+    NTSC = 0,
+    PAL = 1,
+    DENDY = 2,
+};
+
+static inline constexpr std::array<u32, 64> PALETTE = 
+{
+    0x666666, 0x002A88, 0x1412A7, 0x3B00A4, 0x5C007E, 0x6E0040, 0x6C0700,
+    0x561D00, 0x333500, 0x0B4800, 0x005200, 0x004F08, 0x00404D, 0x000000,
+    0x000000, 0x000000, 0xADADAD, 0x155FD9, 0x4240FF, 0x7527FE, 0xA01ACC,
+    0xB71E7B, 0xB53120, 0x994E00, 0x6B6D00, 0x388700, 0x0C9300, 0x008F32,
+    0x007C8D, 0x000000, 0x000000, 0x000000, 0xFFFEFF, 0x64B0FF, 0x9290FF,
+    0xC676FF, 0xF36AFF, 0xFE6ECC, 0xFE8170, 0xEA9E22, 0xBCBE00, 0x88D800,
+    0x5CE430, 0x45E082, 0x48CDDE, 0x4F4F4F, 0x000000, 0x000000, 0xFFFEFF,
+    0xC0DFFF, 0xD3D2FF, 0xE8C8FF, 0xFBC2FF, 0xFEC4EA, 0xFECCC5, 0xF7D8A5,
+    0xE4E594, 0xCFEF96, 0xBDF4AB, 0xB3F3CC, 0xB5EBF2, 0xB8B8B8, 0x000000,
+    0x000000
+};
+
+public:
     explicit PPU(Mapper *m = nullptr) : mapper(m) {}
     ~PPU() = default;
+
+public:
+    bool debug{false};
 
     u8 readReg(u16 addr) { return r.readReg(addr); }
     void writeReg(u16 addr, u8 value) { r.writeReg(addr, value); }
     void step() { r.step(); }
 
-  public:
+public:
     struct State {
         u8 ppuctrl{0};
         u8 ppumask{0};
@@ -107,10 +139,10 @@ class PPU {
         }
     }
 
-  public:
+public:
     std::array<u32, WIDTH * HEIGHT> frame{};
 
-  private:
+private:
     Mapper *mapper{nullptr};
     bool frameReady{0};
     Region videoMode{Region::NTSC};
@@ -119,9 +151,9 @@ class PPU {
     u16 vblankScanline{241};
     bool oddFrameDotSkip{true};
 
-  public:
+public:
     class R2C02 {
-      public:
+    public:
         explicit R2C02(PPU *p)
             : p(p), state(p->state), frame(p->frame),
               frameReady(p->frameReady) {
@@ -132,10 +164,10 @@ class PPU {
         }
         ~R2C02() = default;
 
-      private:
+    private:
         PPU *p;
 
-      public:
+    public:
         State &state;
         std::array<u32, WIDTH * HEIGHT> &frame;
         bool &frameReady;
@@ -149,7 +181,7 @@ class PPU {
         void step();
         std::array<u8, 128 * 128> getPttrnTable(u8 table) const;
 
-      private:
+    private:
         inline bool rendering() const { return (state.ppumask & 0x18) != 0; }
         inline bool visible() const { return (state.scanline < 240); }
         inline bool preLine() const {
@@ -215,4 +247,4 @@ class PPU {
     R2C02 r{this};
 };
 
-} // namespace Core
+} /* namespace Core */

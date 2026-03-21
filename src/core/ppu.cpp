@@ -1,14 +1,15 @@
-#include <array>
-#include <stddef.h>
+#include "common/debug.h"
 
-#include "common.hpp"
-#include "mapper.hpp"
-#include "ppu.hpp"
+#include "core/mapper.h"
+#include "core/ppu.h"
 
 namespace Core {
 
 /* Регистры PPU (0x2000-0x2007) */
 u8 PPU::R2C02::readReg(u16 addr) {
+    if (p->debug)
+        LOG_TRACE("[PPU] readReg addr=0x%04X", static_cast<unsigned>(addr));
+
     addr &= 0x07;
 
     switch (addr) {
@@ -72,6 +73,10 @@ u8 PPU::R2C02::readReg(u16 addr) {
 
 /* Запись в регистры PPU (0x2000-0x2007) */
 void PPU::R2C02::writeReg(u16 addr, u8 data) {
+    if (p->debug)
+        LOG_TRACE("[PPU] writeReg addr=0x%04X data=0x%02X",
+                  static_cast<unsigned>(addr), static_cast<unsigned>(data));
+
     addr &= 0x07;
 
     switch (addr) {
@@ -539,7 +544,7 @@ void PPU::R2C02::renderPixel() {
     if (state.ppumask & 0x01)
         colorIdx &= 0x30;
 
-    frame[static_cast<size_t>(state.scanline) * WIDTH + x] =
+    frame[static_cast<sz>(state.scanline) * WIDTH + x] =
         (0xFF000000u | PALETTE[colorIdx]);
 }
 
@@ -689,7 +694,7 @@ std::array<u8, 128 * 128> PPU::R2C02::getPttrnTable(u8 table) const {
 
                     const u16 x = static_cast<u16>(tileX * 8 + col);
                     const u16 y = static_cast<u16>(tileY * 8 + row);
-                    pixels[static_cast<size_t>(y) * 128 + x] = value;
+                    pixels[static_cast<sz>(y) * 128 + x] = value;
                 }
             }
         }
@@ -698,4 +703,4 @@ std::array<u8, 128 * 128> PPU::R2C02::getPttrnTable(u8 table) const {
     return pixels;
 }
 
-} // namespace Core
+} /* namespace Core */

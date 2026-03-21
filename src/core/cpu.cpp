@@ -1,6 +1,7 @@
-#include "cpu.hpp"
-#include "common.hpp"
-#include "cpu_op.hpp"
+#include "common/debug.h"
+
+#include "core/cpu.h"
+#include "core/cpu_op.h"
 
 namespace Core {
 
@@ -9,17 +10,21 @@ void CPU::reset() {
     if (!mem)
         return;
 
+    if (debug)
+        LOG_DEBUG("[CPU] reset");
+
     c.regs.A = 0;
     c.regs.X = 0;
     c.regs.Y = 0;
     c.regs.P = c.U | c.I;
     c.regs.SP = 0xFD;
-    c.regs.PC = (static_cast<u16>(mem->read(0xFFFD)) << 8) |
-                static_cast<u16>(mem->read(0xFFFC));
+    c.regs.PC = (static_cast<u16>(memRead(0xFFFD)) << 8) |
+                static_cast<u16>(memRead(0xFFFC));
     c.op_cycles = 7;
     c.do_nmi = 0;
     c.do_irq = 0;
     c.page_crossed = 0;
+    debugTraceCounter = 0;
     c.opEntry.op_name = "";
     c.opEntry.am = C6502::IMP;
 }
@@ -45,7 +50,7 @@ void CPU::C6502::irq() {
 
 /* Выполнение одной инструкции */
 void CPU::C6502::step() {
-    const u8 opcode = p->mem->read(regs.PC++);
+    const u8 opcode = p->memRead(regs.PC++);
 
     const auto it = OP_TABLE.find(opcode);
     if (it == OP_TABLE.end()) {
@@ -112,6 +117,20 @@ void CPU::exec() {
     if (!mem)
         return;
 
+    if (debug) {
+        ++debugTraceCounter;
+        if ((debugTraceCounter & 0x0F) == 0) {
+            LOG_TRACE(
+                "[CPU] exec PC=0x%04X A=0x%02X X=0x%02X Y=0x%02X P=0x%02X SP=0x%02X",
+                static_cast<unsigned>(c.regs.PC),
+                static_cast<unsigned>(c.regs.A),
+                static_cast<unsigned>(c.regs.X),
+                static_cast<unsigned>(c.regs.Y),
+                static_cast<unsigned>(c.regs.P),
+                static_cast<unsigned>(c.regs.SP));
+        }
+    }
+
     if (const u32 d = mem->getDma(); d != 0) {
         c.op_cycles = d;
         for (u32 i = 0; i < d; ++i)
@@ -142,4 +161,4 @@ void CPU::exec() {
         mem->tickCpuCycle();
 }
 
-} // namespace Core
+} /* namespace Core */

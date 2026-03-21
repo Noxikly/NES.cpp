@@ -2,11 +2,11 @@
 
 #include <QFile>
 
-#include "core/apu.hpp"
-#include "core/cpu.hpp"
-#include "core/mapper.hpp"
-#include "core/mem.hpp"
-#include "core/ppu.hpp"
+#include "core/apu.h"
+#include "core/cpu.h"
+#include "core/mapper.h"
+#include "core/mem.h"
+#include "core/ppu.h"
 
 inline constexpr u32 NES_STATE = 0x4E5354; /* NST */
 inline constexpr u32 MIN_NES_STATE_VERSION = 2;

@@ -1,24 +1,22 @@
 #pragma once
 
-extern "C" {
-#include <luajit-2.1/lauxlib.h>
-#include <luajit-2.1/lua.h>
-#include <luajit-2.1/luajit.h>
-#include <luajit-2.1/lualib.h>
+extern "C" 
+{
+#   include <luajit-2.1/lauxlib.h>
+#   include <luajit-2.1/lua.h>
+#   include <luajit-2.1/luajit.h>
+#   include <luajit-2.1/lualib.h>
 }
 
 #include <cstring>
-#include <filesystem>
-#include <stdexcept>
-#include <string>
-#include <vector>
 
-#include "cartridge.hpp"
-#include "common.hpp"
+#include "core/cartridge.h"
+
+#include "common/types.h"
 
 namespace Core {
 class Lua : public Cartridge {
-  protected:
+protected:
     enum : u8 {
         IDX_SELF = 1,
         IDX_READ_PRG = 2,
@@ -30,7 +28,7 @@ class Lua : public Cartridge {
         IDX_LOAD_STATE = 8,
     };
 
-  public:
+public:
     explicit Lua() : L(luaL_newstate()) {
         if (!L)
             throw std::runtime_error("[LUA]: Неудалось создать lua_State");
@@ -106,7 +104,7 @@ class Lua : public Cartridge {
         hasLoadState = !lua_isnil(L, IDX_LOAD_STATE);
     }
 
-  public:
+public:
     inline void step() {
         if (!hasStep)
             return;
@@ -152,7 +150,7 @@ class Lua : public Cartridge {
         lua_settop(L, IDX_LOAD_STATE);
     }
 
-  protected:
+protected:
     lua_State *L;
     bool hasReadPRG{false};
     bool hasReadCHR{false};
@@ -204,7 +202,7 @@ class Lua : public Cartridge {
         throw std::runtime_error("[LUA]: " + err);
     }
 
-  private:
+private:
     void cacheFunc(const char *name) {
         lua_getfield(L, IDX_SELF, name);
         if (!lua_isfunction(L, -1)) {
@@ -214,7 +212,14 @@ class Lua : public Cartridge {
     }
 };
 
-} // namespace Core
+} /* namespace Core */
+
+
+#ifdef _WIN32
+#define API_EXPORT extern "C" __declspec(dllexport)
+#else
+#define API_EXPORT extern "C"
+#endif
 
 API_EXPORT void Cartridge_resize(void *instance, u8 vecType, size_t size);
 API_EXPORT void Cartridge_setMirror(void *instance, u8 mode);

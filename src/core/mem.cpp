@@ -1,20 +1,68 @@
-#include "mem.hpp"
-#include "apu.hpp"
-#include "common.hpp"
+#include "common/debug.h"
+#include "common/error.h"
+
+#include "core/apu.h"
+#include "core/mem.h"
 
 namespace Core {
 
-u8 Memory::read(u16 addr) const {
+namespace {
+inline void logReadError(bool debug, u16 addr, Common::Error::ErrorCode code) {
+    if (!debug)
+        return;
+
+    const char *name = Common::Error::toString(code);
+    if (code == Common::Error::ErrorCode::UnmappedRead) {
+        LOG_TRACE("[MEM:read] addr=0x%04X, err=%s", static_cast<unsigned>(addr),
+                  name);
+        return;
+    }
+
+    LOG_WARN("[MEM:read] addr=0x%04X, err=%s", static_cast<unsigned>(addr),
+             name);
+}
+
+inline void logWriteError(bool debug, u16 addr, Common::Error::ErrorCode code) {
+    if (!debug)
+        return;
+
+    const char *name = Common::Error::toString(code);
+    if (code == Common::Error::ErrorCode::UnmappedWrite) {
+        LOG_TRACE("[MEM:write] addr=0x%04X, err=%s", static_cast<unsigned>(addr),
+                  name);
+        return;
+    }
+
+    LOG_WARN("[MEM:write] addr=0x%04X, err=%s", static_cast<unsigned>(addr),
+             name);
+}
+} // namespace
+
+Common::Error::Result<u8> Memory::read(u16 addr) const {
     if (addr < 0x2000) {
         return state.ram[addr & MIRROR];
     }
+
     if (addr < 0x4000) {
-        return (ppu) ? ppu->readReg(addr) : 0;
+        if (!ppu) {
+            logReadError(debug, addr,
+                         Common::Error::ErrorCode::ComponentUnavailable);
+            return Common::Error::Error{
+                Common::Error::ErrorCode::ComponentUnavailable, addr};
+        }
+        return ppu->readReg(addr);
     }
+
     if (addr < 0x4020) {
         switch (addr) {
         case 0x4015:
-            return apu ? apu->readStatus() : 0;
+            if (!apu) {
+                logReadError(debug, addr,
+                             Common::Error::ErrorCode::ComponentUnavailable);
+                return Common::Error::Error{
+                    Common::Error::ErrorCode::ComponentUnavailable, addr};
+            }
+            return apu->readStatus();
         case 0x4016: {
             u8 value;
             if (state.joy) {
@@ -36,28 +84,53 @@ u8 Memory::read(u16 addr) const {
             return value;
         }
         default:
-            return 0;
+            logReadError(debug, addr, Common::Error::ErrorCode::UnmappedRead);
+            return Common::Error::Error{Common::Error::ErrorCode::UnmappedRead,
+                                        addr};
         }
     }
+
     if (addr >= 0x6000 && addr < 0x8000) {
-        return mapper ? mapper->readRAM(addr) : 0;
+        if (!mapper) {
+            logReadError(debug, addr,
+                         Common::Error::ErrorCode::ComponentUnavailable);
+            return Common::Error::Error{
+                Common::Error::ErrorCode::ComponentUnavailable, addr};
+        }
+        return mapper->readRAM(addr);
     }
+
     if (addr >= 0x8000) {
-        return mapper ? mapper->readPRG(addr) : 0;
+        if (!mapper) {
+            logReadError(debug, addr,
+                         Common::Error::ErrorCode::ComponentUnavailable);
+            return Common::Error::Error{
+                Common::Error::ErrorCode::ComponentUnavailable, addr};
+        }
+        return mapper->readPRG(addr);
     }
-    return 0;
+
+    logReadError(debug, addr, Common::Error::ErrorCode::InvalidAddress);
+    return Common::Error::Error{Common::Error::ErrorCode::InvalidAddress, addr};
 }
 
-void Memory::write(u16 addr, u8 value) {
+Common::Error::Status Memory::write(u16 addr, u8 value) {
     if (addr < 0x2000) {
         state.ram[addr & MIRROR] = value;
-        return;
+        return std::nullopt;
     }
+
     if (addr < 0x4000) {
-        if (ppu)
-            ppu->writeReg(addr, value);
-        return;
+        if (!ppu) {
+            logWriteError(debug, addr,
+                          Common::Error::ErrorCode::ComponentUnavailable);
+            return Common::Error::Error{
+                Common::Error::ErrorCode::ComponentUnavailable, addr};
+        }
+        ppu->writeReg(addr, value);
+        return std::nullopt;
     }
+
     if (addr < 0x4020) {
         switch (addr) {
         case 0x4000:
@@ -82,20 +155,33 @@ void Memory::write(u16 addr, u8 value) {
         case 0x4013:
         case 0x4015:
         case 0x4017:
-            if (apu) {
-                apu->writeReg(addr, value);
+            if (!apu) {
+                logWriteError(debug, addr,
+                              Common::Error::ErrorCode::ComponentUnavailable);
+                return Common::Error::Error{
+                    Common::Error::ErrorCode::ComponentUnavailable, addr};
             }
-            return;
+            apu->writeReg(addr, value);
+            return std::nullopt;
         case 0x4014: {
-            if (ppu) {
-                const u16 base = value << 8;
-                for (u16 i = 0; i < 256; ++i) {
-                    const u8 data = read(base + i);
-                    ppu->writeReg(0x2004, data);
-                }
+            if (!ppu) {
+                addDma(state.dmaOdd ? 513 : 514);
+                logWriteError(debug, addr,
+                              Common::Error::ErrorCode::ComponentUnavailable);
+                return Common::Error::Error{
+                    Common::Error::ErrorCode::ComponentUnavailable, addr};
+            }
+
+            const u16 base = value << 8;
+            for (u16 i = 0; i < 256; ++i) {
+                const auto dataRes = read(base + i);
+                const u8 data = std::holds_alternative<u8>(dataRes)
+                                    ? std::get<u8>(dataRes)
+                                    : 0;
+                ppu->writeReg(0x2004, data);
             }
             addDma(state.dmaOdd ? 513 : 514);
-            return;
+            return std::nullopt;
         }
         case 0x4016: {
             const bool newJoy = (value & 0x01) != 0;
@@ -107,22 +193,39 @@ void Memory::write(u16 addr, u8 value) {
                 state.joy2Shift = state.joy2;
             }
             state.joy = newJoy;
-            return;
+            return std::nullopt;
         }
         default:
-            return;
+            logWriteError(debug, addr, Common::Error::ErrorCode::UnmappedWrite);
+            return Common::Error::Error{Common::Error::ErrorCode::UnmappedWrite,
+                                        addr};
         }
     }
+
     if (addr >= 0x6000 && addr < 0x8000) {
-        if (mapper)
-            mapper->writeRAM(addr, value);
-        return;
+        if (!mapper) {
+            logWriteError(debug, addr,
+                          Common::Error::ErrorCode::ComponentUnavailable);
+            return Common::Error::Error{
+                Common::Error::ErrorCode::ComponentUnavailable, addr};
+        }
+        mapper->writeRAM(addr, value);
+        return std::nullopt;
     }
+
     if (addr >= 0x8000) {
-        if (mapper)
-            mapper->writePRG(addr, value);
-        return;
+        if (!mapper) {
+            logWriteError(debug, addr,
+                          Common::Error::ErrorCode::ComponentUnavailable);
+            return Common::Error::Error{
+                Common::Error::ErrorCode::ComponentUnavailable, addr};
+        }
+        mapper->writePRG(addr, value);
+        return std::nullopt;
     }
+
+    logWriteError(debug, addr, Common::Error::ErrorCode::InvalidAddress);
+    return Common::Error::Error{Common::Error::ErrorCode::InvalidAddress, addr};
 }
 
-} // namespace Core
+} /* namespace Core */

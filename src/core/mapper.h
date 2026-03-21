@@ -1,17 +1,15 @@
 #pragma once
 
-#include <filesystem>
-#include <string>
-#include <vector>
-
-#include "common.hpp"
-#include "lua.hpp"
+#include "core/lua.h"
 
 namespace Core {
 class Mapper : public Lua {
   public:
-    Mapper() = default;
+    explicit Mapper() = default;
     ~Mapper() = default;
+
+  public:
+    bool debug{false};
 
     void load(const std::filesystem::path &srcPath = "mappers/") {
         std::filesystem::path path =
@@ -92,4 +90,4 @@ class Mapper : public Lua {
     }
 };
 
-} // namespace Core
+} /* namespace Core */

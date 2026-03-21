@@ -2,22 +2,49 @@
 
 #include <unordered_map>
 
-#include "common.hpp"
-#include "mem.hpp"
+#include "common/types.h"
+
+#include "core/mem.h"
+
 
 namespace Core {
 class CPU {
-  public:
+public:
+/* constants */
+static inline constexpr u8 CONSTANT = 0xEE;
+
+
+public:
     explicit CPU(Memory *m = nullptr) : mem(m) {}
     ~CPU() = default;
+
+public:
+    bool debug{false};
 
     void exec();
     void reset();
 
-  private:
+private:
     Memory *mem{nullptr};
+    u32 debugTraceCounter{0};
 
-  public:
+    inline u8 memRead(u16 addr) const {
+        if (!mem)
+            return 0;
+
+        const auto result = mem->read(addr);
+        if (const auto *value = std::get_if<u8>(&result))
+            return *value;
+        return 0;
+    }
+
+    inline void memWrite(u16 addr, u8 value) {
+        if (!mem)
+            return;
+        (void)mem->write(addr, value);
+    }
+
+public:
     struct State {
         struct Regs {
             u8 A{0}; /* Аккумулятор         */
@@ -38,14 +65,15 @@ class CPU {
     const State &getState() const { return state; }
     void loadState(const State &s) { state = s; }
 
-  public:
+public:
     /* CPU 6502 namespace */
     class C6502 {
-
-      public:
+    public:
         explicit C6502(CPU *p)
-            : p(p), regs(p->state.regs), do_nmi(p->state.do_nmi),
-              do_irq(p->state.do_irq), op_cycles(p->state.op_cycles),
+            : p(p), regs(p->state.regs), 
+              do_nmi(p->state.do_nmi),
+              do_irq(p->state.do_irq), 
+              op_cycles(p->state.op_cycles),
               page_crossed(p->state.page_crossed) {}
         ~C6502() = default;
 
@@ -53,10 +81,10 @@ class CPU {
         void nmi();
         void irq();
 
-      private:
+    private:
         CPU *p; /* Parent */
 
-      public:
+    public:
         enum : u8 {
             N = (1 << 7), /* Отрицательный */
             V = (1 << 6), /* Переполнение  */
@@ -83,14 +111,14 @@ class CPU {
             INDY, /* Indirect, Y */
         } AM;
 
-      public:
+    public:
         State::Regs &regs;
         bool &do_nmi;
         bool &do_irq;
         u32 &op_cycles;
         bool &page_crossed;
 
-      private:
+    private:
         struct OpEntry {
             const char *op_name;
             C6502::AddrMode am;
@@ -102,20 +130,20 @@ class CPU {
 
         static const std::unordered_map<u16, OpEntry> OP_TABLE;
 
-      public:
+    public:
         OpEntry opEntry{};
 
-      private:
+    private:
         /* Утилиты */
         inline u16 read16(u16 addr) const {
-            const u8 high = p->mem->read(addr + 1);
-            const u8 low = p->mem->read(addr);
+            const u8 high = p->memRead(addr + 1);
+            const u8 low = p->memRead(addr);
             return (high << 8) | low;
         }
 
         inline u16 read16_zp(u16 addr) const {
-            const u8 high = p->mem->read((addr + 1) & 0xFF);
-            const u8 low = p->mem->read(addr);
+            const u8 high = p->memRead((addr + 1) & 0xFF);
+            const u8 low = p->memRead(addr);
             return (high << 8) | low;
         }
 
@@ -133,10 +161,10 @@ class CPU {
         }
 
         /* Стек */
-        void push(u8 value) { p->mem->write(STACK + regs.SP--, value); }
-        u8 pop() { return p->mem->read(STACK + (++regs.SP)); }
+        void push(u8 value) { p->memWrite(Core::Memory::STACK + regs.SP--, value); }
+        u8 pop() { return p->memRead(Core::Memory::STACK + (++regs.SP)); }
 
-      private:
+    private:
         /* Режимы адресации */
         inline u16 AM_IMP() const { return 0; }
 
@@ -145,7 +173,7 @@ class CPU {
             return addr;
         };
         inline u16 AM_ZPG() {
-            const u16 addr = static_cast<u16>(p->mem->read(regs.PC++));
+            const u16 addr = static_cast<u16>(p->memRead(regs.PC++));
             return addr;
         }
         inline u16 AM_ZPX() {
@@ -156,7 +184,7 @@ class CPU {
         }
 
         inline u16 AM_REL() {
-            const i8 offset = static_cast<i8>(p->mem->read(regs.PC++));
+            const i8 offset = static_cast<i8>(p->memRead(regs.PC++));
             const u16 addr = regs.PC + offset;
             return addr;
         }
@@ -181,9 +209,9 @@ class CPU {
 
         inline u16 AM_IND() {
             const u16 addr = AM_ABS();
-            const u8 low = p->mem->read(addr);
+            const u8 low = p->memRead(addr);
             const u8 high =
-                p->mem->read((addr & 0xFF00) | ((addr + 1) & 0x00FF));
+                p->memRead((addr & 0xFF00) | ((addr + 1) & 0x00FF));
             const u16 ind = (static_cast<u16>(high) << 8 | low);
             return ind;
         }
@@ -198,11 +226,12 @@ class CPU {
             return idx_addr;
         }
 
-      private:
+    private:
         /* Вспомогательные функции */
         inline void ArithmWithCarry(const u16 val);
         inline void Branch(u16 addr);
 
+    private:
         /* Официальные опкоды */
         void LDA(u16 addr);
         void STA(u16 addr);
@@ -211,6 +240,7 @@ class CPU {
         void LDY(u16 addr);
         void STY(u16 addr);
 
+    private:
         void TAX();
         void TXA();
         void TAY();
@@ -218,6 +248,7 @@ class CPU {
         void TSX();
         void TXS();
 
+    private:
         void ADC(u16 addr);
         void SBC(u16 addr);
         void INC(u16 addr);
@@ -227,11 +258,13 @@ class CPU {
         void INY();
         void DEY();
 
+    private:
         void ASL(u16 addr);
         void LSR(u16 addr);
         void ROL(u16 addr);
         void ROR(u16 addr);
 
+    private:
         void AND(u16 addr);
         void ORA(u16 addr);
         void EOR(u16 addr);
@@ -240,6 +273,7 @@ class CPU {
         void CPX(u16 addr);
         void CPY(u16 addr);
 
+    private:
         void BCC(u16 addr);
         void BCS(u16 addr);
         void BEQ(u16 addr);
@@ -249,12 +283,14 @@ class CPU {
         void BVC(u16 addr);
         void BVS(u16 addr);
 
+    private:
         void JMP(u16 addr);
         void JSR(u16 addr);
         void RTS();
         void BRK();
         void RTI();
 
+    private:
         void PHA();
         void PLA();
         void PHP();
@@ -268,6 +304,7 @@ class CPU {
         void CLV();
         void NOP();
 
+    private:
         /* Неофициальные опкоды */
         void ALR(u16 addr);
         void ANC(u16 addr);
@@ -296,9 +333,9 @@ class CPU {
 
     C6502 c{this};
 
-  public:
+public:
     const char *getLastOpName() const { return c.opEntry.op_name; }
     C6502::AddrMode getLastAddrMode() const { return c.opEntry.am; }
 };
 
-} // namespace Core
+} /* namespace Core */
