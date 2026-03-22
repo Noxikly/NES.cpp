@@ -1,18 +1,14 @@
 #include <algorithm>
 
-#include "common/debug.h"
-
 #include "core/apu.h"
 
-namespace Core {
-
-void APU::powerUp() {
+void Core::APU::powerUp() {
     state.noise.timer = NOISE_TABLE[0];
     state.noise.shiftReg = 1;
     samples.clear();
 }
 
-void APU::reset() {
+void Core::APU::reset() {
     state = State{};
     state.noise.timer = NOISE_TABLE[0];
     state.noise.shiftReg = 1;
@@ -20,12 +16,10 @@ void APU::reset() {
     samples.clear();
 }
 
-void APU::writeReg(u16 addr, u8 value) {
-    if (debug)
-        LOG_TRACE("[APU] writeReg addr=0x%04X value=0x%02X",
-                  static_cast<unsigned>(addr), static_cast<unsigned>(value));
-
+/* Запись в регистры Core::APU (0x4000-0x4017) */
+void Core::APU::writeReg(u16 addr, u8 value) {
     switch (addr) {
+    /* Pulse 1 */
     case 0x4000:
         state.pulse1.duty = (value >> 6) & 0x03;
         state.pulse1.lengthHalt = (value & 0x20) != 0;
@@ -57,6 +51,7 @@ void APU::writeReg(u16 addr, u8 value) {
         }
         break;
 
+    /* Pulse 2 */
     case 0x4004:
         state.pulse2.duty = (value >> 6) & 0x03;
         state.pulse2.lengthHalt = (value & 0x20) != 0;
@@ -88,6 +83,7 @@ void APU::writeReg(u16 addr, u8 value) {
         }
         break;
 
+    /* Triangle */
     case 0x4008:
         state.triangle.ctrlFlag = (value & 0x80) != 0;
         state.triangle.linearReloadValue = value & 0x7F;
@@ -107,6 +103,7 @@ void APU::writeReg(u16 addr, u8 value) {
         state.triangle.linearReloadFlag = true;
         break;
 
+    /* Noise */
     case 0x400C:
         state.noise.lenHalt = (value & 0x20) != 0;
         state.noise.constVol = (value & 0x10) != 0;
@@ -126,11 +123,13 @@ void APU::writeReg(u16 addr, u8 value) {
         state.noise.envelStart = true;
         break;
 
+    /* DMC */
     case 0x4010:
         state.dmc.irqEnabled = (value & 0x80) != 0;
         state.dmc.loop = (value & 0x40) != 0;
         state.dmc.rateIndex = value & 0x0F;
-        state.dmc.timer = static_cast<u16>(DMC_TABLE[state.dmc.rateIndex & 0x0F] - 1);
+        state.dmc.timer =
+            static_cast<u16>(DMC_TABLE[state.dmc.rateIndex & 0x0F] - 1);
         if (!state.dmc.irqEnabled) {
             state.dmc.irqFlag = false;
         }
@@ -148,6 +147,7 @@ void APU::writeReg(u16 addr, u8 value) {
         state.dmc.sampleLenReg = value;
         break;
 
+    /* Каналы enable/disable + DMC start/stop */
     case 0x4015: {
         state.pulse1.enabled = (value & 0x01) != 0;
         state.pulse2.enabled = (value & 0x02) != 0;
@@ -182,6 +182,7 @@ void APU::writeReg(u16 addr, u8 value) {
         break;
     }
 
+    /* Frame counter control */
     case 0x4017:
         state.frameCntMode5 = (value & 0x80) != 0;
         state.irqInhibit = (value & 0x40) != 0;
@@ -198,7 +199,8 @@ void APU::writeReg(u16 addr, u8 value) {
     }
 }
 
-u8 APU::readStatus() {
+/* Чтение статуса Core::APU (0x4015) */
+u8 Core::APU::readStatus() {
     u8 status = 0;
     if (state.pulse1.lenCnt > 0)
         status |= 0x01;
@@ -216,18 +218,18 @@ u8 APU::readStatus() {
         status |= 0x80;
 
     state.frameIrq = false;
-    if (debug)
-        LOG_TRACE("[APU] readStatus -> 0x%02X", static_cast<unsigned>(status));
     return status;
 }
 
-void APU::step(u32 cpuCycles) {
+/* Продвинуть Core::APU на указанное число CPU-циклов */
+void Core::APU::step(u32 cpuCycles) {
     for (u32 i = 0; i < cpuCycles; ++i) {
         if (state.delayHalfFrame) {
             halfFrame();
             state.delayHalfFrame = false;
         }
 
+        /* Отложенная перезапись frame counter после записи в $4017 */
         if (state.frameCntDelay > 0) {
             --state.frameCntDelay;
             if (state.frameCntDelay == 0) {
@@ -252,15 +254,18 @@ void APU::step(u32 cpuCycles) {
             tickFrameCounter();
         }
 
+        /* Pulse/Noise тикают на чётных CPU-циклах */
         if (!state.oddCycle) {
             tickPulseTimer(state.pulse1);
             tickPulseTimer(state.pulse2);
             tickNoiseTimer();
         }
 
+        /* Triangle и DMC тикают каждый цикл */
         tickTriangleTimer();
         tickDmc();
 
+        /* Накопление и генерация аудиосэмплов */
         for (state.sampleAcc += cyclesPerSample; state.sampleAcc >= 1.0;
              state.sampleAcc -= 1.0)
             samples.push_back(mixSample());
@@ -269,7 +274,8 @@ void APU::step(u32 cpuCycles) {
     }
 }
 
-void APU::tickFrameCounter() {
+/* Ход frame counter (4-step / 5-step) */
+void Core::APU::tickFrameCounter() {
     switch (state.frameCycle) {
     case 3728:
     case 11185:
@@ -285,6 +291,7 @@ void APU::tickFrameCounter() {
         break;
     }
 
+    /* NTSC-схема тактов frame counter */
     if (state.frameCntMode5) {
         if (state.frameCycle == 18640) {
             quarterFrame();
@@ -302,7 +309,8 @@ void APU::tickFrameCounter() {
     }
 }
 
-void APU::quarterFrame() {
+/* Quarter-frame: envelope + linear counter */
+void Core::APU::quarterFrame() {
     clockEnvelope(state.pulse1.lengthHalt, state.pulse1.volPeriod,
                   state.pulse1.envelStart, state.pulse1.envelDiv,
                   state.pulse1.envelDecay);
@@ -324,7 +332,8 @@ void APU::quarterFrame() {
         state.triangle.linearReloadFlag = false;
 }
 
-void APU::halfFrame() {
+/* Half-frame: length counters + sweep */
+void Core::APU::halfFrame() {
     clockLengthCounter(state.pulse1.lengthHalt, state.pulse1.lenCnt);
     clockLengthCounter(state.pulse2.lengthHalt, state.pulse2.lenCnt);
     clockLengthCounter(state.triangle.ctrlFlag, state.triangle.lenCnt);
@@ -334,8 +343,9 @@ void APU::halfFrame() {
     clockSweep(state.pulse2, true);
 }
 
-void APU::clockEnvelope(bool lenHalt, u8 volPeriod, bool &startFlag, u8 &div,
-                        u8 &decay) {
+/* Envelope clock для Pulse/Noise */
+void Core::APU::clockEnvelope(bool lenHalt, u8 volPeriod, bool &startFlag,
+                              u8 &div, u8 &decay) {
     if (startFlag) {
         startFlag = false;
         decay = 15;
@@ -354,7 +364,8 @@ void APU::clockEnvelope(bool lenHalt, u8 volPeriod, bool &startFlag, u8 &div,
         --div;
 }
 
-void APU::clockSweep(Pulse &pulse, bool secondChannel) {
+/* Sweep unit для Pulse-каналов */
+void Core::APU::clockSweep(Pulse &pulse, bool secondChannel) {
     const bool doSweep =
         pulse.swpEnabled && (pulse.swpShift > 0) && (pulse.lenCnt > 0);
 
@@ -382,7 +393,8 @@ void APU::clockSweep(Pulse &pulse, bool secondChannel) {
     }
 }
 
-void APU::tickPulseTimer(Pulse &pulse) {
+/* Тик таймера Pulse-канала */
+void Core::APU::tickPulseTimer(Pulse &pulse) {
     if (pulse.timer == 0) {
         pulse.timer = pulse.timerPeriod;
         pulse.seqPos = static_cast<u8>((pulse.seqPos + 1) & 0x07);
@@ -390,7 +402,8 @@ void APU::tickPulseTimer(Pulse &pulse) {
         --pulse.timer;
 }
 
-void APU::tickTriangleTimer() {
+/* Тик таймера Triangle-канала */
+void Core::APU::tickTriangleTimer() {
     if (state.triangle.timer == 0) {
         state.triangle.timer = state.triangle.timerPeriod;
         if (state.triangle.lenCnt > 0 && state.triangle.linearCnt > 0)
@@ -400,7 +413,8 @@ void APU::tickTriangleTimer() {
         --state.triangle.timer;
 }
 
-void APU::tickNoiseTimer() {
+/* Тик таймера Noise-канала и сдвиг LFSR */
+void Core::APU::tickNoiseTimer() {
     if (state.noise.timer == 0) {
         state.noise.timer = NOISE_TABLE[state.noise.periodIndex & 0x0F];
 
@@ -415,7 +429,8 @@ void APU::tickNoiseTimer() {
         --state.noise.timer;
 }
 
-void APU::tickDmc() {
+/* Тик DMC-канала: сдвиг битов и обновление DAC */
+void Core::APU::tickDmc() {
     if (!state.dmc.enabled || !state.dmc.active)
         return;
 
@@ -471,7 +486,8 @@ void APU::tickDmc() {
                        (!state.dmc.bufferEmpty) || (state.dmc.bitsRemain > 0);
 }
 
-u8 APU::pulseOut(const Pulse &pulse, bool secondChannel) const {
+/* Выход Pulse-канала с учётом mute-условий */
+u8 Core::APU::pulseOut(const Pulse &pulse, bool secondChannel) const {
     if (!pulse.enabled || pulse.lenCnt == 0)
         return 0;
     if (pulse.timerPeriod < 8)
@@ -496,7 +512,8 @@ u8 APU::pulseOut(const Pulse &pulse, bool secondChannel) const {
     return pulse.constVol ? pulse.volPeriod : pulse.envelDecay;
 }
 
-f32 APU::mixSample() const {
+/* Нелинейный миксер NES Core::APU (Pulse + TND) */
+f32 Core::APU::mixSample() const {
     const f64 p1 = static_cast<f64>(pulseOut(state.pulse1, false));
     const f64 p2 = static_cast<f64>(pulseOut(state.pulse2, true));
     const f64 t = static_cast<f64>(triangleOut());
@@ -510,5 +527,3 @@ f32 APU::mixSample() const {
 
     return static_cast<f32>(std::clamp(pulse + tnd, 0.0, 1.0));
 }
-
-} /* namespace Core */

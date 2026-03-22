@@ -5,7 +5,6 @@
 
 #include "common/types.h"
 
-
 namespace Common::Error {
 
 enum class ErrorCode : u8 {
@@ -57,9 +56,8 @@ struct Error {
     Error(ErrorCode code, u32 addr) : code(code), addr(addr) {}
 };
 
-template <typename T>
-using Result = std::variant<T, Error>;
+template <typename T> using Result = std::variant<T, Error>;
 
 using Status = std::optional<Error>;
 
-} /* namespace Common */
+} // namespace Common::Error

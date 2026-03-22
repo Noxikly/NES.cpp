@@ -14,13 +14,14 @@ public:
     explicit WFrame(QWidget *p = nullptr);
     ~WFrame() = default;
 
-    void setFrameBuffer(const std::array<u32, WIDTH * HEIGHT> &frameData);
+    void setFrameBuffer(const std::array<u32, WIDTH * HEIGHT> &newFrameData);
     void clear();
 
 protected:
     void paintEvent(QPaintEvent *event) override;
 
 private:
-    const std::array<u32, WIDTH * HEIGHT> *frameData{nullptr};
-    QImage frameImage;
+    std::array<u32, WIDTH * HEIGHT> frameData{};
+    bool hasFrame{false};
+    QImage frameView;
 };

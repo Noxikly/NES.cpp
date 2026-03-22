@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <filesystem>
 
 #include <QAction>
@@ -6,26 +7,101 @@
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QFile>
 #include <QFileDialog>
 #include <QKeyEvent>
 #include <QMenu>
 #include <QMessageBox>
 #include <QMimeData>
+#include <QProcess>
 #include <QStringList>
+#include <QTimer>
 #include <QUrl>
 
 #include "gui/modules/audio.h"
 #include "gui/state.h"
 #include "gui/update.h"
-#include "gui/w_logs.h"
 #include "gui/w_main.h"
 #include "gui/w_settings.h"
 #include "ui_main.h"
 
-WMain::WMain(const QString &romPath, QWidget *parent)
-    : QMainWindow(parent), ui(std::make_unique<Ui::MainWindow>()) {
+#if defined(DEBUG)
+#include "gui/w_logs.h"
+#endif
+
+namespace {
+auto toFsPath(const QString &path) -> std::filesystem::path {
+#if defined(_WIN32)
+    return std::filesystem::path(path.toStdWString());
+#else
+    const QByteArray encoded = QFile::encodeName(path);
+    return std::filesystem::path(encoded.constData());
+#endif
+}
+
+auto isNesFile(const QString &path) -> bool {
+    return path.endsWith(".nes", Qt::CaseInsensitive);
+}
+
+auto firstNesPath(const QMimeData *mime) -> QString {
+    if (!mime || !mime->hasUrls())
+        return {};
+
+    for (const QUrl &url : mime->urls()) {
+        if (!url.isLocalFile())
+            continue;
+
+        const QString path = url.toLocalFile();
+        if (isNesFile(path))
+            return path;
+    }
+
+    return {};
+}
+
+void setDirMask(u8 &state, u8 mask) {
+    if (mask == 0x80)
+        state &= static_cast<u8>(~0x40);
+    else if (mask == 0x40)
+        state &= static_cast<u8>(~0x80);
+    else if (mask == 0x20)
+        state &= static_cast<u8>(~0x10);
+    else if (mask == 0x10)
+        state &= static_cast<u8>(~0x20);
+
+    state |= mask;
+}
+
+class UpdateCriticalGuard {
+public:
+    explicit UpdateCriticalGuard(WUpdate *updater) : updater(updater) {
+        if (this->updater)
+            wasRunning = this->updater->suspendForCriticalSection();
+    }
+
+    ~UpdateCriticalGuard() {
+        if (updater)
+            updater->resumeAfterCriticalSection(wasRunning);
+    }
+
+private:
+    WUpdate *updater{nullptr};
+    bool wasRunning{false};
+};
+
+} /* namespace */
+
+WMain::WMain(const QString &romPath, QWidget *p)
+    : QMainWindow(p), ui(std::make_unique<Ui::MainWindow>()) {
     ui->setupUi(this);
     updater = std::make_unique<WUpdate>(this);
+
+#if !defined(DEBUG)
+    if (ui->actionDebug) {
+        ui->actionDebug->setVisible(false);
+        ui->actionDebug->setEnabled(false);
+    }
+#endif
 
     setAcceptDrops(true);
     setFocusPolicy(Qt::StrongFocus);
@@ -51,47 +127,23 @@ WMain::WMain(const QString &romPath, QWidget *parent)
 WMain::~WMain() = default;
 
 void WMain::dragEnterEvent(QDragEnterEvent *event) {
-    const QMimeData *mime = event->mimeData();
-    if (!mime || !mime->hasUrls()) {
+    if (firstNesPath(event->mimeData()).isEmpty()) {
         QMainWindow::dragEnterEvent(event);
         return;
     }
 
-    for (const QUrl &url : mime->urls()) {
-        if (!url.isLocalFile())
-            continue;
-
-        const QString localPath = url.toLocalFile();
-        if (localPath.endsWith(".nes", Qt::CaseInsensitive)) {
-            event->acceptProposedAction();
-            return;
-        }
-    }
-
-    QMainWindow::dragEnterEvent(event);
+    event->acceptProposedAction();
 }
 
 void WMain::dropEvent(QDropEvent *event) {
-    const QMimeData *mime = event->mimeData();
-    if (!mime || !mime->hasUrls()) {
+    const QString path = firstNesPath(event->mimeData());
+    if (path.isEmpty()) {
         QMainWindow::dropEvent(event);
         return;
     }
 
-    for (const QUrl &url : mime->urls()) {
-        if (!url.isLocalFile())
-            continue;
-
-        const QString localPath = url.toLocalFile();
-        if (!localPath.endsWith(".nes", Qt::CaseInsensitive))
-            continue;
-
-        loadRom(localPath);
-        event->acceptProposedAction();
-        return;
-    }
-
-    QMainWindow::dropEvent(event);
+    event->acceptProposedAction();
+    QTimer::singleShot(0, this, [this, path]() { loadRom(path); });
 }
 
 void WMain::keyPressEvent(QKeyEvent *event) {
@@ -108,23 +160,10 @@ void WMain::keyPressEvent(QKeyEvent *event) {
         return;
     }
 
-    const auto applyNoOpposites = [](u8 &state, u8 mask) {
-        if (mask == 0x80)
-            state &= static_cast<u8>(~0x40);
-        else if (mask == 0x40)
-            state &= static_cast<u8>(~0x80);
-        else if (mask == 0x20)
-            state &= static_cast<u8>(~0x10);
-        else if (mask == 0x10)
-            state &= static_cast<u8>(~0x20);
-
-        state |= mask;
-    };
-
     if (m1 != 0)
-        applyNoOpposites(joyState, m1);
+        setDirMask(joyState, m1);
     if (m2 != 0)
-        applyNoOpposites(joyStateP2, m2);
+        setDirMask(joyStateP2, m2);
 
     syncJoypad();
     event->accept();
@@ -198,7 +237,9 @@ void WMain::rebuildKeyMaps() {
     p2KeyMap[bindings.value("P2_B")] = 0x02;
 }
 
-int WMain::bindingFor(const QString &bindId) const { return bindings.value(bindId, Qt::Key_unknown); }
+int WMain::bindingFor(const QString &bindId) const {
+    return bindings.value(bindId, Qt::Key_unknown);
+}
 
 void WMain::setBinding(const QString &bindId, int key) {
     bindings[bindId] = key;
@@ -217,10 +258,7 @@ void WMain::setAudioEnabled(bool enabled) {
 }
 
 void WMain::setAudioVolume(int volumePercent) {
-    if (volumePercent < 0)
-        volumePercent = 0;
-    if (volumePercent > 100)
-        volumePercent = 100;
+    volumePercent = std::clamp(volumePercent, 0, 100);
 
     audioVolume = volumePercent;
 
@@ -239,7 +277,9 @@ void WMain::syncJoypad() {
 void WMain::stpMenuActions() {
     connect(ui->actionExit, &QAction::triggered, this, &QWidget::close);
 
+#if defined(DEBUG)
     connect(ui->actionDebug, &QAction::triggered, this, &WMain::openLogsWindow);
+#endif
 
     connect(ui->actionSettings, &QAction::triggered, this, [this]() {
         if (!settingsWindow)
@@ -256,38 +296,35 @@ void WMain::stpMenuActions() {
     region->addAction(ui->actionRegionPAL);
     region->addAction(ui->actionRegionDendy);
 
-    connect(ui->actionRegionNTSC, &QAction::toggled, this, [this](bool checked) {
-        if (checked)
-            applyRegion(Core::PPU::Region::NTSC);
-    });
+    const auto bindRegion = [this](QAction *a, Core::PPU::Region r) {
+        connect(a, &QAction::toggled, this, [this, r](bool checked) {
+            if (checked)
+                applyRegion(r);
+        });
+    };
 
-    connect(ui->actionRegionPAL, &QAction::toggled, this, [this](bool checked) {
-        if (checked)
-            applyRegion(Core::PPU::Region::PAL);
-    });
-
-    connect(ui->actionRegionDendy, &QAction::toggled, this, [this](bool checked) {
-        if (checked)
-            applyRegion(Core::PPU::Region::DENDY);
-    });
+    bindRegion(ui->actionRegionNTSC, Core::PPU::Region::NTSC);
+    bindRegion(ui->actionRegionPAL, Core::PPU::Region::PAL);
+    bindRegion(ui->actionRegionDendy, Core::PPU::Region::DENDY);
 
     connect(ui->actionOpen_ROM, &QAction::triggered, this, [this]() {
         const QString path = QFileDialog::getOpenFileName(
-            this, tr("Open NES ROM"), QString(), tr("NES ROM (*.nes);;All files (*.*)"));
+            this, tr("Open NES ROM"), QString(),
+            tr("NES ROM (*.nes);;All files (*.*)"));
 
         if (!path.isEmpty())
             loadRom(path);
     });
 
     connect(ui->actionClose_Game, &QAction::triggered, this, [this]() {
+        UpdateCriticalGuard guard(updater.get());
+
         clearCore();
         currRomPath.clear();
 
-        if (logsWindow) {
-            logsWindow->setCpuDebugText(QString());
-            logsWindow->setPpuDebugText(QString());
-            logsWindow->setStopped(false);
-        }
+#if defined(DEBUG)
+        resetLogsUi();
+#endif
     });
 
     connect(ui->actionReload_ROM, &QAction::triggered, this, [this]() {
@@ -296,16 +333,26 @@ void WMain::stpMenuActions() {
     });
 
     connect(ui->actionPause, &QAction::toggled, this, [this](bool checked) {
+        if (updater && checked)
+            updater->suspendForCriticalSection();
+
         paused = checked;
 
+#if defined(DEBUG)
         if (logsWindow)
             logsWindow->setStopped(checked);
+#endif
+
+        if (updater && !checked)
+            updater->resumeAfterCriticalSection(true);
 
         if (updater)
             updater->updWindowTitle();
     });
 
     connect(ui->actionReset, &QAction::triggered, this, [this]() {
+        UpdateCriticalGuard guard(updater.get());
+
         if (cpu)
             cpu->reset();
         if (apu)
@@ -319,19 +366,23 @@ void WMain::stpMenuActions() {
         if (!romLoaded || !cpu || !ppu || !apu || !mem || !mapper)
             return;
 
+        UpdateCriticalGuard guard(updater.get());
+
         const QString path = QFileDialog::getSaveFileName(
-            this, tr("Save State"), QString(), tr("NES State (*.nst);;All files (*.*)"));
+            this, tr("Save State"), QString(),
+            tr("NES State (*.nst);;All files (*.*)"));
 
         if (path.isEmpty())
             return;
 
-        const u8 regionCode = static_cast<u8>(
-            emuRegion == Core::PPU::Region::PAL
-                ? 1
-                : emuRegion == Core::PPU::Region::DENDY ? 2 : 0);
+        const u8 regionCode =
+            static_cast<u8>(emuRegion == Core::PPU::Region::PAL     ? 1
+                            : emuRegion == Core::PPU::Region::DENDY ? 2
+                                                                    : 0);
 
-        if (!saveBinState(path, cpu->getState(), ppu->getState(), apu->getState(),
-                          mem->getState(), mapper->getState(), regionCode)) {
+        if (!saveBinState(path, cpu->getState(), ppu->getState(),
+                          apu->getState(), mem->getState(), mapper->getState(),
+                          regionCode)) {
             QMessageBox::warning(this, tr("Save State"),
                                  tr("Failed to save state to file."));
         }
@@ -341,8 +392,11 @@ void WMain::stpMenuActions() {
         if (!romLoaded || !cpu || !ppu || !apu || !mem || !mapper)
             return;
 
+        UpdateCriticalGuard guard(updater.get());
+
         const QString path = QFileDialog::getOpenFileName(
-            this, tr("Load State"), QString(), tr("NES State (*.nst);;All files (*.*)"));
+            this, tr("Load State"), QString(),
+            tr("NES State (*.nst);;All files (*.*)"));
 
         if (path.isEmpty())
             return;
@@ -354,75 +408,94 @@ void WMain::stpMenuActions() {
         Core::Mapper::State mapperState{};
         u8 regionState = 0;
 
-        if (!loadBinState(path, cpuState, ppuState, apuState, memState, mapperState,
-                          regionState)) {
+        if (!loadBinState(path, cpuState, ppuState, apuState, memState,
+                          mapperState, regionState)) {
             QMessageBox::warning(this, tr("Load State"),
                                  tr("Failed to load state from file."));
             return;
         }
 
-        if (!currRomPath.isEmpty())
-            mapper->loadNES(currRomPath.toStdWString());
+        try {
+            if (!currRomPath.isEmpty())
+                mapper->loadNES(toFsPath(currRomPath));
 
-        if (mapper->mapperNumber != mapperState.mapperNumber) {
+            if (mapper->mapperNumber != mapperState.mapperNumber) {
+                QMessageBox::warning(
+                    this, tr("Load State"),
+                    tr("Mapper number mismatch. State file was created "
+                       "with a different mapper."));
+                return;
+            }
+
+            mapper->loadState(mapperState);
+            cpu->loadState(cpuState);
+            ppu->loadState(ppuState);
+            apu->loadState(apuState);
+            mem->loadState(memState);
+
+            switch (regionState) {
+            case 1:
+                applyRegion(Core::PPU::Region::PAL);
+                break;
+            case 2:
+                applyRegion(Core::PPU::Region::DENDY);
+                break;
+            default:
+                applyRegion(Core::PPU::Region::NTSC);
+                break;
+            }
+
+            if (audio)
+                audio->reset();
+
+            if (updater) {
+                updater->doFrame();
+
+#if defined(DEBUG)
+                updater->updDebugPanels();
+#endif
+
+                updater->updWindowTitle();
+            }
+
+            paused = true;
+            if (ui && ui->actionPause)
+                ui->actionPause->setChecked(true);
+
+#if defined(DEBUG)
+            if (logsWindow)
+                logsWindow->setStopped(true);
+#endif
+
+        } catch (const std::exception &e) {
             QMessageBox::warning(this, tr("Load State"),
-                                 tr("Mapper number mismatch. State file was created "
-                                    "with a different mapper."));
-            return;
+                                 tr("Failed to apply loaded state:\n%1")
+                                     .arg(QString::fromLocal8Bit(e.what())));
         }
-
-        mapper->loadState(mapperState);
-        cpu->loadState(cpuState);
-        ppu->loadState(ppuState);
-        apu->loadState(apuState);
-        mem->loadState(memState);
-
-        switch (regionState) {
-        case 1:
-            applyRegion(Core::PPU::Region::PAL);
-            break;
-        case 2:
-            applyRegion(Core::PPU::Region::DENDY);
-            break;
-        default:
-            applyRegion(Core::PPU::Region::NTSC);
-            break;
-        }
-
-        if (audio)
-            audio->reset();
-
-        if (updater) {
-            updater->doFrame();
-            updater->updDebugPanels();
-            updater->updWindowTitle();
-        }
-
-        paused = true;
-        if (ui && ui->actionPause)
-            ui->actionPause->setChecked(true);
-        if (logsWindow)
-            logsWindow->setStopped(true);
     });
 
     ui->actionRegionNTSC->setChecked(true);
 }
 
+#if defined(DEBUG)
 void WMain::openLogsWindow() {
     if (!logsWindow) {
         logsWindow = std::make_unique<WLogs>(this);
 
-        connect(logsWindow.get(), &WLogs::stopToggled, this, [this](bool stopped) {
-            paused = stopped;
-            if (ui && ui->actionPause)
-                ui->actionPause->setChecked(stopped);
-            if (updater)
-                updater->updWindowTitle();
-        });
+        connect(logsWindow.get(), &WLogs::stopToggled, this,
+                [this](bool stopped) {
+                    paused = stopped;
+                    if (ui && ui->actionPause)
+                        ui->actionPause->setChecked(stopped);
+                    if (updater)
+                        updater->updWindowTitle();
+                });
 
         connect(logsWindow.get(), &WLogs::stepForwardRequested, this, [this]() {
             if (!paused || !romLoaded || !updater)
                 return;
+
+            UpdateCriticalGuard guard(updater.get());
 
             updater->runCpuInstruction();
             updater->presentAudioAndVideo();
@@ -430,12 +503,7 @@ void WMain::openLogsWindow() {
             updater->updWindowTitle();
         });
 
-        connect(logsWindow.get(), &WLogs::stepBackRequested, this, [this]() {
-            if (logsWindow) {
-                logsWindow->appendLine(
-                    QStringLiteral("[INFO] Step back is not implemented in the src runtime yet"));
-            }
-        });
+        connect(logsWindow.get(), &WLogs::stepBackRequested, this, []() {});
     }
 
     logsWindow->show();
@@ -444,17 +512,31 @@ void WMain::openLogsWindow() {
 
     if (updater) {
         updater->syncDebugFlagsFromLogWindow();
-        updater->updDebugPanels();
+        QTimer::singleShot(0, this, [this]() {
+            if (updater && logsWindow && logsWindow->isVisible())
+                updater->updDebugPanels();
+        });
     }
 }
 
+void WMain::resetLogsUi() {
+    if (!logsWindow)
+        return;
+
+    logsWindow->setCpuDebugText(QString());
+    logsWindow->setPpuDebugText(QString());
+    logsWindow->setStopped(false);
+}
+#endif
+
 void WMain::clearCore() {
+    if (ui && ui->frameView)
+        ui->frameView->clear();
+
     cpu.reset();
     apu.reset();
-    audio.reset();
     mem.reset();
     ppu.reset();
-    mapper.reset();
 
     joyState = 0;
     joyStateP2 = 0;
@@ -462,30 +544,46 @@ void WMain::clearCore() {
     romLoaded = false;
     paused = false;
 
-    if (ui && ui->frameView)
-        ui->frameView->clear();
-
-    if (logsWindow) {
-        logsWindow->setCpuDebugText(QString());
-        logsWindow->setPpuDebugText(QString());
-        logsWindow->setStopped(false);
-    }
+#if defined(DEBUG)
+    resetLogsUi();
+#endif
 
     if (updater)
         updater->updWindowTitle();
 }
 
 void WMain::loadRom(const QString &romPath) {
+    if (romLoaded) {
+        const QString exePath = QCoreApplication::applicationFilePath();
+        const bool relaunched =
+            QProcess::startDetached(exePath, QStringList{romPath});
+
+        if (relaunched) {
+            QTimer::singleShot(0, this, &QWidget::close);
+            return;
+        }
+    }
+
+    const bool timerWasActive = frameTimer.isActive();
+    if (timerWasActive)
+        frameTimer.stop();
+
+    UpdateCriticalGuard guard(updater.get());
+
     try {
         clearCore();
 
-        mapper = std::make_unique<Core::Mapper>();
-        mapper->loadNES(romPath.toStdWString());
+        if (!mapper)
+            mapper = std::make_unique<Core::Mapper>();
+
+        mapper->loadNES(toFsPath(romPath));
 
         std::filesystem::path mapperDir;
         const QStringList dirs = {
-            QDir::cleanPath(QCoreApplication::applicationDirPath() + "/mappers"),
-            QDir::cleanPath(QCoreApplication::applicationDirPath() + "/../mappers"),
+            QDir::cleanPath(QCoreApplication::applicationDirPath() +
+                            "/mappers"),
+            QDir::cleanPath(QCoreApplication::applicationDirPath() +
+                            "/../mappers"),
             QDir::cleanPath(QDir::currentPath() + "/mappers")};
 
         for (const QString &dir : dirs) {
@@ -506,18 +604,20 @@ void WMain::loadRom(const QString &romPath) {
         apu = std::make_unique<Core::APU>();
         apu->powerUp();
 
-        apu->cyclesPerSample = (emuRegion == Core::PPU::Region::PAL)
-                                   ? Core::APU::PAL_CYCLES
-                               : (emuRegion == Core::PPU::Region::DENDY)
-                                   ? Core::APU::DENDY_CYCLES
-                                   : Core::APU::NTSC_CYCLES;
+        apu->cyclesPerSample =
+            (emuRegion == Core::PPU::Region::PAL)     ? Core::APU::PAL_CYCLES
+            : (emuRegion == Core::PPU::Region::DENDY) ? Core::APU::DENDY_CYCLES
+                                                      : Core::APU::NTSC_CYCLES;
 
-        audio = std::make_unique<NesAudio>();
+        if (!audio)
+            audio = std::make_unique<NesAudio>();
+
         audio->setEnabled(audioEnabled);
         audio->setVolume(static_cast<f32>(audioVolume) / 100.0f);
         audio->reset();
 
-        mem = std::make_unique<Core::Memory>(mapper.get(), ppu.get(), apu.get());
+        mem =
+            std::make_unique<Core::Memory>(mapper.get(), ppu.get(), apu.get());
         cpu = std::make_unique<Core::CPU>(mem.get());
         cpu->reset();
 
@@ -535,35 +635,41 @@ void WMain::loadRom(const QString &romPath) {
         if (ui->frameView)
             ui->frameView->setFrameBuffer(ppu->frame);
 
-        if (logsWindow) {
-            logsWindow->setCpuDebugText(QString());
-            logsWindow->setPpuDebugText(QString());
-            logsWindow->setStopped(false);
-        }
+#if defined(DEBUG)
+        resetLogsUi();
+#endif
 
         fpsUpdate = 0;
         currFps = 0.0;
         fpsTimer.restart();
         if (updater)
             updater->updWindowTitle();
+
+        if (timerWasActive && !frameTimer.isActive())
+            frameTimer.start();
     } catch (const std::exception &e) {
         clearCore();
-        QMessageBox::critical(this, tr("Open ROM"), tr("Failed to load ROM:\n%1").arg(e.what()));
+        QMessageBox::critical(this, tr("Open ROM"),
+                              tr("Failed to load ROM:\n%1").arg(e.what()));
+
+        if (timerWasActive && !frameTimer.isActive())
+            frameTimer.start();
     }
 }
 
 void WMain::applyRegion(Core::PPU::Region region) {
+    UpdateCriticalGuard guard(updater.get());
+
     emuRegion = region;
 
     if (ppu)
         ppu->setRegion(region);
 
     if (apu) {
-        apu->cyclesPerSample = (region == Core::PPU::Region::PAL)
-                                   ? Core::APU::PAL_CYCLES
-                               : (region == Core::PPU::Region::DENDY)
-                                   ? Core::APU::DENDY_CYCLES
-                                   : Core::APU::NTSC_CYCLES;
+        apu->cyclesPerSample =
+            (region == Core::PPU::Region::PAL)     ? Core::APU::PAL_CYCLES
+            : (region == Core::PPU::Region::DENDY) ? Core::APU::DENDY_CYCLES
+                                                   : Core::APU::NTSC_CYCLES;
     }
 
     if (updater)

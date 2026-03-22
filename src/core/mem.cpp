@@ -1,138 +1,101 @@
-#include "common/debug.h"
-#include "common/error.h"
-
-#include "core/apu.h"
 #include "core/mem.h"
+#include "core/apu.h"
 
-namespace Core {
-
-namespace {
-inline void logReadError(bool debug, u16 addr, Common::Error::ErrorCode code) {
-    if (!debug)
-        return;
-
-    const char *name = Common::Error::toString(code);
-    if (code == Common::Error::ErrorCode::UnmappedRead) {
-        LOG_TRACE("[MEM:read] addr=0x%04X, err=%s", static_cast<unsigned>(addr),
-                  name);
-        return;
-    }
-
-    LOG_WARN("[MEM:read] addr=0x%04X, err=%s", static_cast<unsigned>(addr),
-             name);
-}
-
-inline void logWriteError(bool debug, u16 addr, Common::Error::ErrorCode code) {
-    if (!debug)
-        return;
-
-    const char *name = Common::Error::toString(code);
-    if (code == Common::Error::ErrorCode::UnmappedWrite) {
-        LOG_TRACE("[MEM:write] addr=0x%04X, err=%s", static_cast<unsigned>(addr),
-                  name);
-        return;
-    }
-
-    LOG_WARN("[MEM:write] addr=0x%04X, err=%s", static_cast<unsigned>(addr),
-             name);
-}
-} // namespace
-
-Common::Error::Result<u8> Memory::read(u16 addr) const {
+/* Чтение из CPU memory map */
+u8 Core::Memory::read(u16 addr) const {
+    /* 0x0000-0x1FFF: RAM */
     if (addr < 0x2000) {
         return state.ram[addr & MIRROR];
     }
 
+    /* 0x2000-0x3FFF: регистры PPU */
     if (addr < 0x4000) {
         if (!ppu) {
-            logReadError(debug, addr,
-                         Common::Error::ErrorCode::ComponentUnavailable);
-            return Common::Error::Error{
-                Common::Error::ErrorCode::ComponentUnavailable, addr};
+            return 0;
         }
         return ppu->readReg(addr);
     }
 
+    /* 0x4000-0x401F: APU и I/O */
     if (addr < 0x4020) {
         switch (addr) {
+        /* APU status */
         case 0x4015:
             if (!apu) {
-                logReadError(debug, addr,
-                             Common::Error::ErrorCode::ComponentUnavailable);
-                return Common::Error::Error{
-                    Common::Error::ErrorCode::ComponentUnavailable, addr};
+                return 0;
             }
             return apu->readStatus();
+
+        /* Контроллер 1 */
         case 0x4016: {
             u8 value;
             if (state.joy) {
                 value = ((state.joy1 & 0x01) | 0x40);
             } else {
                 value = ((state.joy1Shift & 0x01) | 0x40);
-                state.joy1Shift = static_cast<u8>((state.joy1Shift >> 1) | 0x80);
+                state.joy1Shift =
+                    static_cast<u8>((state.joy1Shift >> 1) | 0x80);
             }
             return value;
         }
+
+        /* Контроллер 2 */
         case 0x4017: {
             u8 value;
             if (state.joy) {
                 value = ((state.joy2 & 0x01) | 0x40);
             } else {
                 value = ((state.joy2Shift & 0x01) | 0x40);
-                state.joy2Shift = static_cast<u8>((state.joy2Shift >> 1) | 0x80);
+                state.joy2Shift =
+                    static_cast<u8>((state.joy2Shift >> 1) | 0x80);
             }
             return value;
         }
         default:
-            logReadError(debug, addr, Common::Error::ErrorCode::UnmappedRead);
-            return Common::Error::Error{Common::Error::ErrorCode::UnmappedRead,
-                                        addr};
+            return 0;
         }
     }
 
+    /* 0x6000-0x7FFF: PRG-RAM картриджа */
     if (addr >= 0x6000 && addr < 0x8000) {
         if (!mapper) {
-            logReadError(debug, addr,
-                         Common::Error::ErrorCode::ComponentUnavailable);
-            return Common::Error::Error{
-                Common::Error::ErrorCode::ComponentUnavailable, addr};
+            return 0;
         }
         return mapper->readRAM(addr);
     }
 
+    /* 0x8000-0xFFFF: PRG-ROM/mapper */
     if (addr >= 0x8000) {
         if (!mapper) {
-            logReadError(debug, addr,
-                         Common::Error::ErrorCode::ComponentUnavailable);
-            return Common::Error::Error{
-                Common::Error::ErrorCode::ComponentUnavailable, addr};
+            return 0;
         }
         return mapper->readPRG(addr);
     }
 
-    logReadError(debug, addr, Common::Error::ErrorCode::InvalidAddress);
-    return Common::Error::Error{Common::Error::ErrorCode::InvalidAddress, addr};
+    return 0;
 }
 
-Common::Error::Status Memory::write(u16 addr, u8 value) {
+/* Запись в CPU memory map */
+void Core::Memory::write(u16 addr, u8 value) {
+    /* 0x0000-0x1FFF: RAM */
     if (addr < 0x2000) {
         state.ram[addr & MIRROR] = value;
-        return std::nullopt;
+        return;
     }
 
+    /* 0x2000-0x3FFF: регистры PPU */
     if (addr < 0x4000) {
         if (!ppu) {
-            logWriteError(debug, addr,
-                          Common::Error::ErrorCode::ComponentUnavailable);
-            return Common::Error::Error{
-                Common::Error::ErrorCode::ComponentUnavailable, addr};
+            return;
         }
         ppu->writeReg(addr, value);
-        return std::nullopt;
+        return;
     }
 
+    /* 0x4000-0x401F: APU / I/O / DMA */
     if (addr < 0x4020) {
         switch (addr) {
+        /* APU регистры */
         case 0x4000:
         case 0x4001:
         case 0x4002:
@@ -156,33 +119,28 @@ Common::Error::Status Memory::write(u16 addr, u8 value) {
         case 0x4015:
         case 0x4017:
             if (!apu) {
-                logWriteError(debug, addr,
-                              Common::Error::ErrorCode::ComponentUnavailable);
-                return Common::Error::Error{
-                    Common::Error::ErrorCode::ComponentUnavailable, addr};
+                return;
             }
             apu->writeReg(addr, value);
-            return std::nullopt;
+            return;
+
+        /* OAM DMA: копирование 256 байт на $2004 */
         case 0x4014: {
             if (!ppu) {
                 addDma(state.dmaOdd ? 513 : 514);
-                logWriteError(debug, addr,
-                              Common::Error::ErrorCode::ComponentUnavailable);
-                return Common::Error::Error{
-                    Common::Error::ErrorCode::ComponentUnavailable, addr};
+                return;
             }
 
             const u16 base = value << 8;
             for (u16 i = 0; i < 256; ++i) {
-                const auto dataRes = read(base + i);
-                const u8 data = std::holds_alternative<u8>(dataRes)
-                                    ? std::get<u8>(dataRes)
-                                    : 0;
+                const u8 data = read(base + i);
                 ppu->writeReg(0x2004, data);
             }
             addDma(state.dmaOdd ? 513 : 514);
-            return std::nullopt;
+            return;
         }
+
+        /* JOY strobe */
         case 0x4016: {
             const bool newJoy = (value & 0x01) != 0;
             if (newJoy) {
@@ -193,39 +151,30 @@ Common::Error::Status Memory::write(u16 addr, u8 value) {
                 state.joy2Shift = state.joy2;
             }
             state.joy = newJoy;
-            return std::nullopt;
+            return;
         }
         default:
-            logWriteError(debug, addr, Common::Error::ErrorCode::UnmappedWrite);
-            return Common::Error::Error{Common::Error::ErrorCode::UnmappedWrite,
-                                        addr};
+            return;
         }
     }
 
+    /* 0x6000-0x7FFF: PRG-RAM картриджа */
     if (addr >= 0x6000 && addr < 0x8000) {
         if (!mapper) {
-            logWriteError(debug, addr,
-                          Common::Error::ErrorCode::ComponentUnavailable);
-            return Common::Error::Error{
-                Common::Error::ErrorCode::ComponentUnavailable, addr};
+            return;
         }
         mapper->writeRAM(addr, value);
-        return std::nullopt;
+        return;
     }
 
+    /* 0x8000-0xFFFF: mapper write */
     if (addr >= 0x8000) {
         if (!mapper) {
-            logWriteError(debug, addr,
-                          Common::Error::ErrorCode::ComponentUnavailable);
-            return Common::Error::Error{
-                Common::Error::ErrorCode::ComponentUnavailable, addr};
+            return;
         }
         mapper->writePRG(addr, value);
-        return std::nullopt;
+        return;
     }
 
-    logWriteError(debug, addr, Common::Error::ErrorCode::InvalidAddress);
-    return Common::Error::Error{Common::Error::ErrorCode::InvalidAddress, addr};
+    return;
 }
-
-} /* namespace Core */

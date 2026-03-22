@@ -1,15 +1,8 @@
-#include "common/debug.h"
-
-#include "core/mapper.h"
 #include "core/ppu.h"
-
-namespace Core {
+#include "core/mapper.h"
 
 /* Регистры PPU (0x2000-0x2007) */
-u8 PPU::R2C02::readReg(u16 addr) {
-    if (p->debug)
-        LOG_TRACE("[PPU] readReg addr=0x%04X", static_cast<unsigned>(addr));
-
+u8 Core::PPU::R2C02::readReg(u16 addr) {
     addr &= 0x07;
 
     switch (addr) {
@@ -72,11 +65,7 @@ u8 PPU::R2C02::readReg(u16 addr) {
 }
 
 /* Запись в регистры PPU (0x2000-0x2007) */
-void PPU::R2C02::writeReg(u16 addr, u8 data) {
-    if (p->debug)
-        LOG_TRACE("[PPU] writeReg addr=0x%04X data=0x%02X",
-                  static_cast<unsigned>(addr), static_cast<unsigned>(data));
-
+void Core::PPU::R2C02::writeReg(u16 addr, u8 data) {
     addr &= 0x07;
 
     switch (addr) {
@@ -173,7 +162,7 @@ void PPU::R2C02::writeReg(u16 addr, u8 data) {
 }
 
 /* Один пиксельный тик PPU */
-void PPU::R2C02::step() {
+void Core::PPU::R2C02::step() {
     tickOpenBusDecay();
 
     if (state.nmiDelay != 0) {
@@ -233,7 +222,7 @@ void PPU::R2C02::step() {
     }
 }
 
-void PPU::R2C02::updateNmiState(bool delayVblank) {
+void Core::PPU::R2C02::updateNmiState(bool delayVblank) {
     const bool newNmi = state.nmiOutput && ((state.ppustatus & 0x80) != 0);
     const bool ris = !state.nmiLine && newNmi;
     state.nmiLine = newNmi;
@@ -255,7 +244,7 @@ void PPU::R2C02::updateNmiState(bool delayVblank) {
     state.nmi = 1;
 }
 
-void PPU::R2C02::incrementVRAMAddr() {
+void Core::PPU::R2C02::incrementVRAMAddr() {
     if (rendering() && renderLine()) {
         state.v = incrementX(state.v);
         incrementY();
@@ -265,7 +254,7 @@ void PPU::R2C02::incrementVRAMAddr() {
     state.v = static_cast<u16>(state.v + ((state.ppuctrl & 0x04) ? 32 : 1));
 }
 
-void PPU::R2C02::refreshOpenBus(u8 value, u8 mask) {
+void Core::PPU::R2C02::refreshOpenBus(u8 value, u8 mask) {
     const u32 decayTicks =
         p->oddFrameDotSkip ? OPENBUS_DECAY_TICKS_NTSC : OPENBUS_DECAY_TICKS_PAL;
 
@@ -278,7 +267,7 @@ void PPU::R2C02::refreshOpenBus(u8 value, u8 mask) {
     }
 }
 
-void PPU::R2C02::tickOpenBusDecay() {
+void Core::PPU::R2C02::tickOpenBusDecay() {
     for (u8 bit = 0; bit < 8; ++bit) {
         auto &t = state.openBusDecay[bit];
         if (t == 0)
@@ -290,7 +279,7 @@ void PPU::R2C02::tickOpenBusDecay() {
 }
 
 /* dot выборка фона */
-void PPU::R2C02::bgFetchTick() {
+void Core::PPU::R2C02::bgFetchTick() {
     const bool bgFetchDot =
         renderDot() || (state.pixel >= 321 && state.pixel <= 336);
 
@@ -374,7 +363,7 @@ void PPU::R2C02::bgFetchTick() {
 }
 
 /* dot тайминги спрайтовой части */
-void PPU::R2C02::spriteTimingTick() {
+void Core::PPU::R2C02::spriteTimingTick() {
     if (state.pixel == 1) {
         state.secOAM.fill(0xFF);
         state.secOAMAddr = 0;
@@ -435,7 +424,7 @@ void PPU::R2C02::spriteTimingTick() {
 }
 
 /* Выборка до 8 спрайтов следующей scanline */
-void PPU::R2C02::evalSprites() {
+void Core::PPU::R2C02::evalSprites() {
     state.spriteCount = 0;
     bool overflow = 0;
     state.secOAM.fill(0xFF);
@@ -489,7 +478,7 @@ void PPU::R2C02::evalSprites() {
 }
 
 /* Рендер одного экранного пикселя */
-void PPU::R2C02::renderPixel() {
+void Core::PPU::R2C02::renderPixel() {
     const u8 x = static_cast<u8>(state.pixel - 1);
 
     /* Фон */
@@ -549,7 +538,7 @@ void PPU::R2C02::renderPixel() {
 }
 
 /* Получение пикселя фона */
-void PPU::R2C02::backgroundPixel(u8 &pixel, u8 &pal) {
+void Core::PPU::R2C02::backgroundPixel(u8 &pixel, u8 &pal) {
     const u16 mask = static_cast<u16>(0x8000 >> state.fineX);
     const u8 p0 = (state.bgFetch.shLow & mask) ? 1 : 0;
     const u8 p1 = (state.bgFetch.shHigh & mask) ? 1 : 0;
@@ -561,8 +550,8 @@ void PPU::R2C02::backgroundPixel(u8 &pixel, u8 &pal) {
 }
 
 /* Получение front спрайтового пикселя (с учетом OAM) */
-void PPU::R2C02::spritePixel(u8 x, u8 &pixel, u8 &pal, u8 &prio,
-                             bool &sprite0) {
+void Core::PPU::R2C02::spritePixel(u8 x, u8 &pixel, u8 &pal, u8 &prio,
+                                   bool &sprite0) {
     pixel = 0;
     sprite0 = 0;
 
@@ -599,7 +588,7 @@ void PPU::R2C02::spritePixel(u8 x, u8 &pixel, u8 &pal, u8 &prio,
 }
 
 /* Чтение из пространства PPU 0x0000-0x3FFF */
-u8 PPU::R2C02::readVRAM(u16 addr) const {
+u8 Core::PPU::R2C02::readVRAM(u16 addr) const {
     addr &= 0x3FFF;
 
     /* CHR (pattern tables) */
@@ -622,7 +611,7 @@ u8 PPU::R2C02::readVRAM(u16 addr) const {
 }
 
 /* Запись в пространство PPU 0x0000-0x3FFF */
-void PPU::R2C02::writeVRAM(u16 addr, u8 data) {
+void Core::PPU::R2C02::writeVRAM(u16 addr, u8 data) {
     addr &= 0x3FFF;
     /* Любая запись в VRAM инвалидирует кэш фона */
     state.bgFetch.valid = 0;
@@ -644,7 +633,7 @@ void PPU::R2C02::writeVRAM(u16 addr, u8 data) {
 }
 
 /* Преобразование 0x2000-0x2FFF с учетом mirroring */
-u16 PPU::R2C02::mirrorAddress(u16 addr) const {
+u16 Core::PPU::R2C02::mirrorAddress(u16 addr) const {
     addr = static_cast<u16>(0x2000 + (addr & 0x0FFF));
     const u16 offset = addr & 0x03FF;
     u16 table = static_cast<u16>((addr >> 10) & 0x03);
@@ -673,8 +662,8 @@ u16 PPU::R2C02::mirrorAddress(u16 addr) const {
     return static_cast<u16>(table * 0x400 + offset);
 }
 
-/* Отладочный дамп pattern table в 2bpp индексах (0..3) */
-std::array<u8, 128 * 128> PPU::R2C02::getPttrnTable(u8 table) const {
+#if defined(DEBUG)
+std::array<u8, 128 * 128> Core::PPU::R2C02::getPttrnTable(u8 table) const {
     std::array<u8, 128 * 128> pixels{};
     const u16 base = (table & 1) ? 0x1000 : 0x0000;
 
@@ -703,4 +692,4 @@ std::array<u8, 128 * 128> PPU::R2C02::getPttrnTable(u8 table) const {
     return pixels;
 }
 
-} /* namespace Core */
+#endif

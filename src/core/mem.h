@@ -2,8 +2,6 @@
 
 #include <array>
 
-#include "common/error.h"
-
 #include "core/mapper.h"
 #include "core/ppu.h"
 
@@ -12,22 +10,18 @@ class APU;
 
 class Memory {
 public:
-/* constants */
-static inline constexpr u16 MIRROR = 0x07FF;
-static inline constexpr u16 STACK = 0x0100;
-
+    static inline constexpr u16 MIRROR = 0x07FF;
+    static inline constexpr u16 STACK = 0x0100;
 
 public:
-    explicit Memory(Mapper *m = nullptr, 
-                    PPU *p = nullptr, 
-                    APU *a = nullptr)
+    explicit Memory(Mapper *m = nullptr, PPU *p = nullptr, APU *a = nullptr)
         : mapper(m), ppu(p), apu(a) {
         state.ram.fill(0);
     }
     ~Memory() = default;
 
-    Common::Error::Result<u8> read(u16 addr) const;
-    Common::Error::Status write(u16 addr, u8 value);
+    u8 read(u16 addr) const;
+    void write(u16 addr, u8 value);
 
 public:
     bool debug{false};
@@ -56,6 +50,10 @@ public:
         const u32 d = state.dma;
         state.dma = 0;
         return d;
+    }
+    void tickCpuCycles(u32 cycles) {
+        if ((cycles & 0x01) != 0)
+            state.dmaOdd = !state.dmaOdd;
     }
     void tickCpuCycle() { state.dmaOdd = !state.dmaOdd; }
 

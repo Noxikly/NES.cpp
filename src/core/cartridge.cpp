@@ -2,9 +2,7 @@
 
 #include "core/cartridge.h"
 
-namespace Core {
-
-void Cartridge::loadNES(const std::filesystem::path &path) {
+void Core::Cartridge::loadNES(const std::filesystem::path &path) {
     std::ifstream rom(path, std::ios::binary);
     if (!rom)
         throw std::runtime_error("[LOAD]: Не удалось открыть ROM файл");
@@ -41,5 +39,3 @@ void Cartridge::loadNES(const std::filesystem::path &path) {
         CHR_ROM.clear();
     }
 }
-
-} /* namespace Core */

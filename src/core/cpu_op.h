@@ -415,7 +415,8 @@ inline void CPU::C6502::ANC(u16 addr) {
 }
 
 inline void CPU::C6502::ANE(u16 addr) {
-    regs.A = static_cast<u8>((regs.A | CPU::CONSTANT) & regs.X & p->memRead(addr));
+    regs.A =
+        static_cast<u8>((regs.A | CPU::CONSTANT) & regs.X & p->memRead(addr));
     set_nz(regs.A);
 }
 

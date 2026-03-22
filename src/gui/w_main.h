@@ -1,7 +1,7 @@
 #pragma once
 
-#include <QHash>
 #include <QElapsedTimer>
+#include <QHash>
 #include <QMainWindow>
 #include <QString>
 #include <QTimer>
@@ -19,7 +19,11 @@ class QDropEvent;
 class QKeyEvent;
 class WUpdate;
 class WSettings;
+
+#if defined(DEBUG)
 class WLogs;
+#endif
+
 class NesAudio;
 
 namespace Ui {
@@ -30,8 +34,7 @@ class WMain : public QMainWindow {
     friend class WUpdate;
 
 public:
-    explicit WMain(const QString &romPath = QString(),
-                   QWidget *parent = nullptr);
+    explicit WMain(const QString &romPath = QString(), QWidget *p = nullptr);
     ~WMain() override;
 
     int bindingFor(const QString &bindId) const;
@@ -52,7 +55,10 @@ private:
     static u8 joyMaskFromMap(const QHash<int, u8> &map, int key);
 
     void stpMenuActions();
+#if defined(DEBUG)
     void openLogsWindow();
+    void resetLogsUi();
+#endif
     void clearCore();
     void loadRom(const QString &romPath);
     void applyRegion(Core::PPU::Region region);
@@ -71,7 +77,9 @@ private:
     std::unique_ptr<NesAudio> audio;
     std::unique_ptr<WUpdate> updater;
     std::unique_ptr<WSettings> settingsWindow;
+#if defined(DEBUG)
     std::unique_ptr<WLogs> logsWindow;
+#endif
 
     QTimer frameTimer;
     QElapsedTimer fpsTimer;

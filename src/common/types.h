@@ -1,7 +1,7 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
-
 
 using u8 = std::uint8_t;   /* 8-bit unsigned byte   */
 using u16 = std::uint16_t; /* 16-bit unsigned short */

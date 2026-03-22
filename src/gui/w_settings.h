@@ -1,7 +1,7 @@
 #pragma once
 
-#include <QHash>
 #include <QDialog>
+#include <QHash>
 
 class QEvent;
 class QPushButton;
@@ -11,7 +11,7 @@ namespace Ui {
 class SettingsDialog;
 class SettingsLayoutPage;
 class SettingsAudioPage;
-}
+} // namespace Ui
 
 class WSettings : public QDialog {
 public:

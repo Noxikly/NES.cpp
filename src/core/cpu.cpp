@@ -1,4 +1,4 @@
-#include "common/debug.h"
+#include <array>
 
 #include "core/cpu.h"
 #include "core/cpu_op.h"
@@ -9,9 +9,6 @@ namespace Core {
 void CPU::reset() {
     if (!mem)
         return;
-
-    if (debug)
-        LOG_DEBUG("[CPU] reset");
 
     c.regs.A = 0;
     c.regs.X = 0;
@@ -52,8 +49,20 @@ void CPU::C6502::irq() {
 void CPU::C6502::step() {
     const u8 opcode = p->memRead(regs.PC++);
 
-    const auto it = OP_TABLE.find(opcode);
-    if (it == OP_TABLE.end()) {
+    static const std::array<const OpEntry *, 256> opLut = []() {
+        std::array<const OpEntry *, 256> lut{};
+        lut.fill(nullptr);
+
+        for (const auto &kv : OP_TABLE) {
+            const u8 op = static_cast<u8>(kv.first & 0xFF);
+            lut[op] = &kv.second;
+        }
+
+        return lut;
+    }();
+
+    const OpEntry *op = opLut[opcode];
+    if (!op) {
         p->c.opEntry.op_name = "???";
         p->c.opEntry.am = IMP;
         op_cycles = 2;
@@ -61,54 +70,21 @@ void CPU::C6502::step() {
         return;
     }
 
-    const OpEntry &op = it->second;
-
-    p->c.opEntry.op_name = op.op_name;
-    p->c.opEntry.am = op.am;
-    op_cycles = op.cycles;
+    p->c.opEntry.op_name = op->op_name;
+    p->c.opEntry.am = op->am;
+    op_cycles = op->cycles;
     page_crossed = 0;
 
-    auto resolve_addr = [this](AddrMode am) -> u16 {
-        switch (am) {
-        case IMM:
-            return AM_IMM();
-        case IMP:
-            return AM_IMP();
-        case ZPG:
-            return AM_ZPG();
-        case ZPGX:
-            return AM_ZPX();
-        case ZPGY:
-            return AM_ZPY();
-        case REL:
-            return AM_REL();
-        case ABS:
-            return AM_ABS();
-        case ABSX:
-            return AM_ABX();
-        case ABSY:
-            return AM_ABY();
-        case IND:
-            return AM_IND();
-        case INDX:
-            return AM_INX();
-        case INDY:
-            return AM_INY();
-        }
-
-        return AM_IMP();
-    };
-
-    if (op.op_imp != nullptr) {
-        (this->*op.op_imp)();
+    if (op->op_imp != nullptr) {
+        (this->*op->op_imp)();
         return;
     }
 
-    if (op.op_addr != nullptr) {
-        const u16 addr = resolve_addr(op.am);
-        (this->*op.op_addr)(addr);
+    if (op->op_addr != nullptr) {
+        const u16 addr = resolveAddr(op->am);
+        (this->*op->op_addr)(addr);
 
-        if (op.page_crossed && page_crossed)
+        if (op->page_crossed && page_crossed)
             op_cycles += 1;
     }
 }
@@ -117,32 +93,18 @@ void CPU::exec() {
     if (!mem)
         return;
 
-    if (debug) {
-        ++debugTraceCounter;
-        if ((debugTraceCounter & 0x0F) == 0) {
-            LOG_TRACE(
-                "[CPU] exec PC=0x%04X A=0x%02X X=0x%02X Y=0x%02X P=0x%02X SP=0x%02X",
-                static_cast<unsigned>(c.regs.PC),
-                static_cast<unsigned>(c.regs.A),
-                static_cast<unsigned>(c.regs.X),
-                static_cast<unsigned>(c.regs.Y),
-                static_cast<unsigned>(c.regs.P),
-                static_cast<unsigned>(c.regs.SP));
-        }
-    }
+    const auto tickCycles = [this](u32 cycles) { mem->tickCpuCycles(cycles); };
 
     if (const u32 d = mem->getDma(); d != 0) {
         c.op_cycles = d;
-        for (u32 i = 0; i < d; ++i)
-            mem->tickCpuCycle();
+        tickCycles(d);
         return;
     }
 
     if (c.do_nmi) {
         c.do_nmi = 0;
         c.nmi();
-        for (u32 i = 0; i < c.op_cycles; ++i)
-            mem->tickCpuCycle();
+        tickCycles(c.op_cycles);
         return;
     }
 
@@ -150,15 +112,13 @@ void CPU::exec() {
         c.do_irq = 0;
         if (!(c.regs.P & C6502::I)) {
             c.irq();
-            for (u32 i = 0; i < c.op_cycles; ++i)
-                mem->tickCpuCycle();
+            tickCycles(c.op_cycles);
             return;
         }
     }
 
     c.step();
-    for (u32 i = 0; i < c.op_cycles; ++i)
-        mem->tickCpuCycle();
+    tickCycles(c.op_cycles);
 }
 
 } /* namespace Core */

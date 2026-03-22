@@ -13,8 +13,9 @@ NesAudio::NesAudio() {
     format.setChannelCount(Core::APU::AUDIO_CHANNELS);
     format.setSampleFormat(QAudioFormat::Int16);
 
-    sink = std::make_unique<QAudioSink>(QMediaDevices::defaultAudioOutput(), format);
-    sink->setBufferSize(2048 * 4);
+    sink = std::make_unique<QAudioSink>(QMediaDevices::defaultAudioOutput(),
+                                        format);
+    sink->setBufferSize(MAX_BYTES);
     sink->setVolume(volume);
 
     io = sink->start();
@@ -26,7 +27,8 @@ NesAudio::~NesAudio() {
 }
 
 void NesAudio::reset() {
-    pcmBuffer.clear();
+    clearRing();
+
     if (!sink)
         return;
 
@@ -35,44 +37,11 @@ void NesAudio::reset() {
 }
 
 void NesAudio::pushSamples(const std::vector<f32> &samples) {
-    if (!enabled || !sink || !io || samples.empty())
+    if (!enabled || !sink || !io)
         return;
 
-    const qsizetype totalFrames = static_cast<qsizetype>(samples.size());
-    const qsizetype frameCount = std::min(totalFrames, MAX_FRAMES);
-    const qsizetype startFrame = totalFrames - frameCount;
-
-    QByteArray in;
-    in.resize(frameCount * static_cast<qsizetype>(sizeof(qint16) * 2));
-
-    auto *out = reinterpret_cast<qint16 *>(in.data());
-    for (qsizetype i = 0; i < frameCount; ++i) {
-        const qint16 pcm = toI16(samples[static_cast<sz>(startFrame + i)]);
-        out[i * 2 + 0] = pcm;
-        out[i * 2 + 1] = pcm;
-    }
-
-    pcmBuffer.append(in);
-
-    if (pcmBuffer.size() > MAX_BYTES)
-        pcmBuffer.remove(0, pcmBuffer.size() - MAX_BYTES);
-
-    while (!pcmBuffer.isEmpty()) {
-        const qint64 freeBytes = sink->bytesFree();
-        if (freeBytes <= 0)
-            break;
-
-        qint64 toWrite = std::min<qint64>(freeBytes, pcmBuffer.size());
-        toWrite &= ~qint64(3); // stereo 16-bit (4 bytes)
-        if (toWrite <= 0)
-            break;
-
-        const qint64 written = io->write(pcmBuffer.constData(), toWrite);
-        if (written <= 0)
-            break;
-
-        pcmBuffer.remove(0, static_cast<qsizetype>(written));
-    }
+    appendSamples(samples);
+    drainSink();
 }
 
 void NesAudio::setEnabled(bool value) {
@@ -88,7 +57,7 @@ void NesAudio::setEnabled(bool value) {
 
     sink->stop();
     io = nullptr;
-    pcmBuffer.clear();
+    clearRing();
 }
 
 void NesAudio::setVolume(f32 v) {
@@ -100,4 +69,79 @@ void NesAudio::setVolume(f32 v) {
 qint16 NesAudio::toI16(f32 sample) {
     const f32 clamped = std::clamp(sample, -1.0f, 1.0f);
     return static_cast<qint16>(clamped * 32767.0f);
+}
+
+void NesAudio::clearRing() {
+    ringRead = 0;
+    ringWrite = 0;
+    ringUsed = 0;
+}
+
+void NesAudio::appendSamples(const std::vector<f32> &samples) {
+    if (samples.empty())
+        return;
+
+    const qsizetype totalFrames = static_cast<qsizetype>(samples.size());
+    const qsizetype frameCount = std::min(totalFrames, MAX_FRAMES);
+    const qsizetype startFrame = totalFrames - frameCount;
+
+    const auto pushSample = [this](qint16 sample) {
+        if (ringUsed == RING_SAMPLES) {
+            ringRead = (ringRead + 1) % RING_SAMPLES;
+            --ringUsed;
+        }
+
+        pcmRing[static_cast<size_t>(ringWrite)] = sample;
+        ringWrite = (ringWrite + 1) % RING_SAMPLES;
+        ++ringUsed;
+    };
+
+    for (qsizetype i = 0; i < frameCount; ++i) {
+        const qint16 pcm = toI16(samples[static_cast<sz>(startFrame + i)]);
+        pushSample(pcm);
+        pushSample(pcm);
+    }
+}
+
+void NesAudio::drainSink() {
+    while (ringUsed > 1) {
+        const qint64 freeBytes = sink->bytesFree();
+        if (freeBytes <= 0)
+            break;
+
+        qint64 writableBytes =
+            freeBytes & ~qint64(3); /* stereo frame aligned */
+        if (writableBytes <= 0)
+            break;
+
+        qsizetype writableSamples = static_cast<qsizetype>(
+            writableBytes / static_cast<qint64>(sizeof(qint16)));
+        writableSamples &= ~qsizetype(1);
+        if (writableSamples <= 0)
+            break;
+
+        const qsizetype contiguous =
+            std::min(ringUsed, RING_SAMPLES - ringRead);
+        qsizetype samplesToWrite = std::min(contiguous, writableSamples);
+        samplesToWrite &= ~qsizetype(1);
+        if (samplesToWrite <= 0)
+            break;
+
+        const qint64 written = io->write(
+            reinterpret_cast<const char *>(pcmRing.data() +
+                                           static_cast<size_t>(ringRead)),
+            static_cast<qint64>(samplesToWrite *
+                                static_cast<qsizetype>(sizeof(qint16))));
+        if (written <= 0)
+            break;
+
+        qsizetype writtenSamples = static_cast<qsizetype>(
+            written / static_cast<qint64>(sizeof(qint16)));
+        writtenSamples &= ~qsizetype(1);
+        if (writtenSamples <= 0)
+            break;
+
+        ringRead = (ringRead + writtenSamples) % RING_SAMPLES;
+        ringUsed -= writtenSamples;
+    }
 }

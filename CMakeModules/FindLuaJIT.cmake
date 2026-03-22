@@ -12,7 +12,7 @@ find_path(LUAJIT_INCLUDE_DIR
 )
 
 find_library(LUAJIT_LIBRARY
-    NAMES luajit-5.1 luajit
+    NAMES luajit-5.1 luajit lua51
     HINTS ${PC_LUAJIT_LIBRARY_DIRS}
 )
 

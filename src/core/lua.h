@@ -1,14 +1,22 @@
 #pragma once
 
-extern "C" 
-{
-#   include <luajit-2.1/lauxlib.h>
-#   include <luajit-2.1/lua.h>
-#   include <luajit-2.1/luajit.h>
-#   include <luajit-2.1/lualib.h>
+extern "C" {
+#if defined(_MSC_VER)
+#include <lauxlib.h>
+#include <lua.h>
+#include <luajit.h>
+#include <lualib.h>
+#else
+#include <luajit-2.1/lauxlib.h>
+#include <luajit-2.1/lua.h>
+#include <luajit-2.1/luajit.h>
+#include <luajit-2.1/lualib.h>
+#endif
 }
 
+#include <cmath>
 #include <cstring>
+#include <limits>
 
 #include "core/cartridge.h"
 
@@ -17,6 +25,8 @@ extern "C"
 namespace Core {
 class Lua : public Cartridge {
 protected:
+    static inline constexpr u32 INVALID_ADDR = 0xFFFFFFFFu;
+
     enum : u8 {
         IDX_SELF = 1,
         IDX_READ_PRG = 2,
@@ -166,11 +176,28 @@ protected:
         lua_pushinteger(L, addr);
         if (lua_pcall(L, 2, 1, 0) != LUA_OK)
             throwLuaError();
+
         if (lua_isnil(L, -1)) {
             lua_settop(L, IDX_LOAD_STATE);
-            return 0xFFFFFFFF;
+            return INVALID_ADDR;
         }
-        const u32 r = static_cast<u32>(lua_tointeger(L, -1));
+
+        if (!lua_isnumber(L, -1)) {
+            lua_settop(L, IDX_LOAD_STATE);
+            throw std::runtime_error(
+                "[LUA]: Mapper callback must return integer address or nil");
+        }
+
+        const lua_Number num = lua_tonumber(L, -1);
+        if (!std::isfinite(num) || num < 0.0 ||
+            num > static_cast<lua_Number>(std::numeric_limits<u32>::max()) ||
+            std::floor(num) != num) {
+            lua_settop(L, IDX_LOAD_STATE);
+            throw std::runtime_error(
+                "[LUA]: Mapper callback returned invalid address");
+        }
+
+        const u32 r = static_cast<u32>(num);
         lua_settop(L, IDX_LOAD_STATE);
         return r;
     }
@@ -182,11 +209,28 @@ protected:
         lua_pushinteger(L, value);
         if (lua_pcall(L, 3, 1, 0) != LUA_OK)
             throwLuaError();
+
         if (lua_isnil(L, -1)) {
             lua_settop(L, IDX_LOAD_STATE);
-            return 0xFFFFFFFF;
+            return INVALID_ADDR;
         }
-        const u32 r = static_cast<u32>(lua_tointeger(L, -1));
+
+        if (!lua_isnumber(L, -1)) {
+            lua_settop(L, IDX_LOAD_STATE);
+            throw std::runtime_error(
+                "[LUA]: Mapper callback must return integer address or nil");
+        }
+
+        const lua_Number num = lua_tonumber(L, -1);
+        if (!std::isfinite(num) || num < 0.0 ||
+            num > static_cast<lua_Number>(std::numeric_limits<u32>::max()) ||
+            std::floor(num) != num) {
+            lua_settop(L, IDX_LOAD_STATE);
+            throw std::runtime_error(
+                "[LUA]: Mapper callback returned invalid address");
+        }
+
+        const u32 r = static_cast<u32>(num);
         lua_settop(L, IDX_LOAD_STATE);
         return r;
     }
@@ -213,7 +257,6 @@ private:
 };
 
 } /* namespace Core */
-
 
 #ifdef _WIN32
 #define API_EXPORT extern "C" __declspec(dllexport)

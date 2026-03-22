@@ -4,12 +4,12 @@
  <widget class="QDialog" name="LogsDialog">
   <property name="geometry">
    <rect>
-    <x>0</x>
-    <y>0</y>
-    <width>720</width>
-    <height>680</height>
-   </rect>
-  </property>
+     <x>0</x>
+     <y>0</y>
+     <width>740</width>
+     <height>680</height>
+    </rect>
+   </property>
   <property name="windowTitle">
    <string>Log Viewer</string>
   </property>
@@ -19,100 +19,6 @@
      <property name="currentIndex">
       <number>0</number>
      </property>
-     <widget class="QWidget" name="tabLogs">
-      <attribute name="title">
-       <string>Logs</string>
-      </attribute>
-      <layout class="QVBoxLayout" name="verticalLayoutLogsTab">
-       <item>
-        <widget class="QPlainTextEdit" name="logView">
-         <property name="readOnly">
-          <bool>true</bool>
-         </property>
-         <property name="lineWrapMode">
-          <enum>QPlainTextEdit::NoWrap</enum>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayoutModules">
-         <item>
-          <widget class="QCheckBox" name="chkCpu">
-           <property name="text">
-            <string>CPU</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QCheckBox" name="chkPpu">
-           <property name="text">
-            <string>PPU</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QCheckBox" name="chkApu">
-           <property name="text">
-            <string>APU</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QCheckBox" name="chkMemory">
-           <property name="text">
-            <string>Memory</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QCheckBox" name="chkMapper">
-           <property name="text">
-            <string>Mapper</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QCheckBox" name="chkGui">
-           <property name="text">
-            <string>GUI</string>
-           </property>
-           <property name="checked">
-            <bool>true</bool>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <spacer name="horizontalSpacerModulesRight">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-        </layout>
-       </item>
-      </layout>
-     </widget>
      <widget class="QWidget" name="tabCpu">
       <attribute name="title">
        <string>Debug CPU</string>
@@ -149,10 +55,22 @@
         <layout class="QHBoxLayout" name="horizontalLayoutPpuPatterns">
          <item>
           <widget class="QLabel" name="ppuPattern0Label">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="minimumSize">
             <size>
-             <width>180</width>
-             <height>180</height>
+             <width>335</width>
+             <height>335</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>335</width>
+             <height>335</height>
             </size>
            </property>
            <property name="alignment">
@@ -168,10 +86,22 @@
          </item>
          <item>
           <widget class="QLabel" name="ppuPattern1Label">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
            <property name="minimumSize">
             <size>
-             <width>180</width>
-             <height>180</height>
+             <width>335</width>
+             <height>335</height>
+            </size>
+           </property>
+           <property name="maximumSize">
+            <size>
+             <width>335</width>
+             <height>335</height>
             </size>
            </property>
            <property name="alignment">
@@ -214,13 +144,6 @@
       <widget class="QPushButton" name="btnStepForward">
        <property name="text">
         <string>Next instruction</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QPushButton" name="btnClearLogs">
-       <property name="text">
-        <string>Clear logs</string>
        </property>
       </widget>
      </item>

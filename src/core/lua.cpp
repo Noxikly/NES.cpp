@@ -5,8 +5,6 @@
 #include "core/cartridge.h"
 #include "core/lua.h"
 
-namespace Core {
-
 API_EXPORT void Cartridge_resize(void *instance, u8 vecType, size_t size) {
     auto *cart = static_cast<Core::Cartridge *>(instance);
 
@@ -37,5 +35,3 @@ API_EXPORT void Cartridge_triggerIRQ(void *instance) {
 API_EXPORT void Cartridge_clearIRQ(void *instance) {
     static_cast<Core::Cartridge *>(instance)->irqFlag = false;
 }
-
-} /* namespace Core */

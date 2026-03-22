@@ -7,52 +7,51 @@
 namespace Core {
 class APU {
 public:
-/* constants */
-static inline constexpr u8 AUDIO_CHANNELS = 2;
-static inline constexpr f64 AUDIO_SAMPLE_RATE = 44100.0;
-static inline constexpr f64 NTSC_CPU_HZ = 1789773.0;
-static inline constexpr f64 PAL_CPU_HZ = 1652097.0;
-static inline constexpr f64 DENDY_CPU_HZ = 1773448.0;
-static inline constexpr f64 NTSC_CYCLES = AUDIO_SAMPLE_RATE / NTSC_CPU_HZ;
-static inline constexpr f64 PAL_CYCLES = AUDIO_SAMPLE_RATE / PAL_CPU_HZ;
-static inline constexpr f64 DENDY_CYCLES = AUDIO_SAMPLE_RATE / DENDY_CPU_HZ;
+    /* Аудио выход */
+    static inline constexpr u8 AUDIO_CHANNELS = 2;
+    static inline constexpr f64 AUDIO_SAMPLE_RATE = 44100.0;
 
-static inline constexpr u8 LENGTH_TABLE[32] = 
-{
-     10, 254, 20,  2, 40,  4, 80,  6,  
-    160,   8, 60, 10, 14, 12, 26, 14,
-     12,  16, 24, 18, 48, 20, 96, 22,
-    192,  24, 72, 26, 16, 28, 32, 30,
-};
+    /* Частота CPU по регионам */
+    static inline constexpr f64 NTSC_CPU_HZ = 1789773.0;
+    static inline constexpr f64 PAL_CPU_HZ = 1652097.0;
+    static inline constexpr f64 DENDY_CPU_HZ = 1773448.0;
 
-static inline constexpr u8 DUTY_TABLE[4][8] = 
-{
-    {0, 1, 0, 0, 0, 0, 0, 0},
-    {0, 1, 1, 0, 0, 0, 0, 0},
-    {0, 1, 1, 1, 1, 0, 0, 0},
-    {1, 0, 0, 1, 1, 1, 1, 1},
-};
+    /* Сколько CPU-циклов приходится на 1 аудиосэмпл */
+    static inline constexpr f64 NTSC_CYCLES = AUDIO_SAMPLE_RATE / NTSC_CPU_HZ;
+    static inline constexpr f64 PAL_CYCLES = AUDIO_SAMPLE_RATE / PAL_CPU_HZ;
+    static inline constexpr f64 DENDY_CYCLES = AUDIO_SAMPLE_RATE / DENDY_CPU_HZ;
 
-static inline constexpr u8 TRIANGLE_TABLE[32] = 
-{
-    15, 14, 13, 12, 11, 10,  9,  8, 
-    7,   6,  5,  4,  3,  2,  1,  0,
-    0,   1,  2,  3,  4,  5,  6,  7, 
-    8,  9,  10, 11, 12, 13, 14, 15,
-};
+    /* Таблица длины (length counter) для Pulse/Triangle/Noise */
+    static inline constexpr u8 LENGTH_TABLE[32] = {
+        10, 254, 20, 2,  40, 4,  80, 6,  160, 8,  60, 10, 14, 12, 26, 14,
+        12, 16,  24, 18, 48, 20, 96, 22, 192, 24, 72, 26, 16, 28, 32, 30,
+    };
 
-static inline constexpr u16 NOISE_TABLE[16] = 
-{
-      4,   8,  16,  32,  64,   96,  128,  160, 
-    202, 254, 380, 508, 762, 1016, 2034, 4068,
-};
+    /* Скважность Pulse-каналов */
+    static inline constexpr u8 DUTY_TABLE[4][8] = {
+        {0, 1, 0, 0, 0, 0, 0, 0},
+        {0, 1, 1, 0, 0, 0, 0, 0},
+        {0, 1, 1, 1, 1, 0, 0, 0},
+        {1, 0, 0, 1, 1, 1, 1, 1},
+    };
 
-static inline constexpr u16 DMC_TABLE[16] = 
-{
-    428, 380, 340, 320, 286, 254, 226, 214, 
-    190, 160, 142, 128, 106,  84,  72,  54,
-};
+    /* 32-ступенчатая форма Triangle-канала */
+    static inline constexpr u8 TRIANGLE_TABLE[32] = {
+        15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5,  4,  3,  2,  1,  0,
+        0,  1,  2,  3,  4,  5,  6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    };
 
+    /* Периоды Noise-канала */
+    static inline constexpr u16 NOISE_TABLE[16] = {
+        4,   8,   16,  32,  64,  96,   128,  160,
+        202, 254, 380, 508, 762, 1016, 2034, 4068,
+    };
+
+    /* Периоды DMC-канала */
+    static inline constexpr u16 DMC_TABLE[16] = {
+        428, 380, 340, 320, 286, 254, 226, 214,
+        190, 160, 142, 128, 106, 84,  72,  54,
+    };
 
 public:
     explicit APU() = default;
@@ -67,18 +66,22 @@ public:
     void step(u32 cpuCycles);
 
 public:
+    /* Pulse канал */
     struct Pulse {
         bool enabled{false};
 
+        /* Регистр $4000/$4004 */
         u8 duty{0};
         u8 volPeriod{0};
         bool lengthHalt{false};
         bool constVol{false};
 
+        /* Envelope */
         u8 envelDiv{0};
         u8 envelDecay{0};
         bool envelStart{false};
 
+        /* Sweep */
         u8 swpPeriod{0};
         u8 swpShift{0};
         u8 swpDiv{0};
@@ -86,29 +89,35 @@ public:
         bool swpNegate{false};
         bool swpReload{false};
 
+        /* Таймер/секвенсер */
         u16 timerPeriod{0};
         u16 timer{0};
         u8 seqPos{0};
         u8 lenCnt{0};
     };
 
+    /* Triangle канал */
     struct Triangle {
         bool enabled{false};
 
+        /* Linear counter */
         u8 linearReloadValue{0};
         u8 linearCnt{0};
         bool ctrlFlag{false};
         bool linearReloadFlag{false};
 
+        /* Таймер/секвенсер */
         u16 timerPeriod{0};
         u16 timer{0};
         u8 seqPos{0};
         u8 lenCnt{0};
     };
 
+    /* Noise канал */
     struct Noise {
         bool enabled{false};
 
+        /* Envelope */
         u8 volPeriod{0};
         bool lenHalt{false};
         bool constVol{false};
@@ -117,6 +126,7 @@ public:
         u8 envelDecay{0};
         bool envelStart{false};
 
+        /* Шумовой LFSR + период */
         u8 periodIndex{0};
         u16 timer{0};
         u8 lenCnt{0};
@@ -125,6 +135,7 @@ public:
         u16 shiftReg{1};
     };
 
+    /* DMC канал */
     struct DMC {
         bool enabled{false};
         bool irqEnabled{false};
@@ -134,8 +145,11 @@ public:
         bool loop{false};
         bool irqFlag{false};
 
+        /* Параметры семпла из регистров */
         u8 sampleAddrReg{0};
         u8 sampleLenReg{0};
+
+        /* Внутреннее состояние воспроизведения */
         u8 bitsRemain{0};
         u8 shiftReg{0};
         u8 sampleBuffer{0};
@@ -149,10 +163,12 @@ public:
     bool debug{false};
 
 public:
+    /* Региональный коэффициент семплирования */
     f64 cyclesPerSample{NTSC_CYCLES};
     std::vector<f32> samples{};
 
 public:
+    /* Полное состояние APU для save/load state */
     struct State {
         Pulse pulse1{};
         Pulse pulse2{};
@@ -160,17 +176,20 @@ public:
         Noise noise{};
         DMC dmc{};
 
+        /* Состояние frame counter */
         u32 frameCycle{0};
         bool frameCntMode5{false};
         bool irqInhibit{false};
         bool frameIrq{false};
         bool oddCycle{false};
 
+        /* Отложенные события frame counter */
         u8 frameCntDelay{0};
         bool pendQuarterFrame{false};
         bool pendHalfFrame{false};
         bool delayHalfFrame{false};
 
+        /* Накопитель до следующего аудиосэмпла */
         f64 sampleAcc{0.0};
     };
 
@@ -184,9 +203,12 @@ private:
     State state{};
 
 private:
+    /* Такты блока frame counter */
     void tickFrameCounter();
     void quarterFrame();
     void halfFrame();
+
+    /* DMC: перезагрузка длины и загрузка следующего байта */
     inline void reloadDmc() {
         state.dmc.bytesRemain =
             static_cast<u16>(state.dmc.sampleLenReg) * 16 + 1;
@@ -203,6 +225,7 @@ private:
             state.dmc.irqFlag = state.dmc.irqEnabled;
     }
 
+    /* Envelope / Length / Sweep helper'ы */
     static void clockEnvelope(bool lenHalt, u8 volPeriod, bool &startFlag,
                               u8 &div, u8 &decay);
     static void clockLengthCounter(bool halt, u8 &lenCnt) {
@@ -211,12 +234,14 @@ private:
     }
     static void clockSweep(Pulse &pulse, bool secondChannel);
 
+    /* Тики каналов */
     void tickPulseTimer(Pulse &pulse);
     void tickTriangleTimer();
     void tickNoiseTimer();
     void tickDmc();
 
 private:
+    /* Микширование каналов */
     u8 pulseOut(const Pulse &pulse, bool secondChannel) const;
     u8 triangleOut() const {
         if (!state.triangle.enabled || state.triangle.lenCnt == 0 ||

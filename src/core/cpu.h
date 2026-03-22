@@ -6,13 +6,10 @@
 
 #include "core/mem.h"
 
-
 namespace Core {
 class CPU {
 public:
-/* constants */
-static inline constexpr u8 CONSTANT = 0xEE;
-
+    static inline constexpr u8 CONSTANT = 0xEE;
 
 public:
     explicit CPU(Memory *m = nullptr) : mem(m) {}
@@ -31,17 +28,13 @@ private:
     inline u8 memRead(u16 addr) const {
         if (!mem)
             return 0;
-
-        const auto result = mem->read(addr);
-        if (const auto *value = std::get_if<u8>(&result))
-            return *value;
-        return 0;
+        return mem->read(addr);
     }
 
     inline void memWrite(u16 addr, u8 value) {
         if (!mem)
             return;
-        (void)mem->write(addr, value);
+        mem->write(addr, value);
     }
 
 public:
@@ -70,10 +63,8 @@ public:
     class C6502 {
     public:
         explicit C6502(CPU *p)
-            : p(p), regs(p->state.regs), 
-              do_nmi(p->state.do_nmi),
-              do_irq(p->state.do_irq), 
-              op_cycles(p->state.op_cycles),
+            : p(p), regs(p->state.regs), do_nmi(p->state.do_nmi),
+              do_irq(p->state.do_irq), op_cycles(p->state.op_cycles),
               page_crossed(p->state.page_crossed) {}
         ~C6502() = default;
 
@@ -161,7 +152,9 @@ public:
         }
 
         /* Стек */
-        void push(u8 value) { p->memWrite(Core::Memory::STACK + regs.SP--, value); }
+        void push(u8 value) {
+            p->memWrite(Core::Memory::STACK + regs.SP--, value);
+        }
         u8 pop() { return p->memRead(Core::Memory::STACK + (++regs.SP)); }
 
     private:
@@ -210,8 +203,7 @@ public:
         inline u16 AM_IND() {
             const u16 addr = AM_ABS();
             const u8 low = p->memRead(addr);
-            const u8 high =
-                p->memRead((addr & 0xFF00) | ((addr + 1) & 0x00FF));
+            const u8 high = p->memRead((addr & 0xFF00) | ((addr + 1) & 0x00FF));
             const u16 ind = (static_cast<u16>(high) << 8 | low);
             return ind;
         }
@@ -224,6 +216,38 @@ public:
             const u16 idx_addr = addr + regs.Y;
             page_crossed = (addr & 0xFF00) != (idx_addr & 0xFF00);
             return idx_addr;
+        }
+
+    private:
+        inline u16 resolveAddr(AddrMode am) {
+            switch (am) {
+            case IMM:
+                return AM_IMM();
+            case IMP:
+                return AM_IMP();
+            case ZPG:
+                return AM_ZPG();
+            case ZPGX:
+                return AM_ZPX();
+            case ZPGY:
+                return AM_ZPY();
+            case REL:
+                return AM_REL();
+            case ABS:
+                return AM_ABS();
+            case ABSX:
+                return AM_ABX();
+            case ABSY:
+                return AM_ABY();
+            case IND:
+                return AM_IND();
+            case INDX:
+                return AM_INX();
+            case INDY:
+                return AM_INY();
+            }
+
+            return AM_IMP();
         }
 
     private:

@@ -1,5 +1,7 @@
 #include "gui/w_settings.h"
 
+#include <array>
+
 #include <QEvent>
 #include <QKeyEvent>
 #include <QKeySequence>
@@ -10,8 +12,18 @@
 #include "ui_layout.h"
 #include "ui_settings.h"
 
+namespace {
+struct BindDef {
+    QPushButton *btn;
+    const char *id;
+    int key;
+};
+
+} // namespace
+
 WSettings::WSettings(WMain *mainWindow, QWidget *parent)
-    : QDialog(parent), main(mainWindow), ui(std::make_unique<Ui::SettingsDialog>()),
+    : QDialog(parent), main(mainWindow),
+      ui(std::make_unique<Ui::SettingsDialog>()),
       layoutUi(std::make_unique<Ui::SettingsLayoutPage>()),
       audioUi(std::make_unique<Ui::SettingsAudioPage>()) {
     ui->setupUi(this);
@@ -51,30 +63,36 @@ WSettings::WSettings(WMain *mainWindow, QWidget *parent)
 
 WSettings::~WSettings() = default;
 
-
 void WSettings::initLayoutBindings() {
-    bindButton(layoutUi->btnP1Up, "P1_UP", Qt::Key_W);
-    bindButton(layoutUi->btnP1Down, "P1_DOWN", Qt::Key_S);
-    bindButton(layoutUi->btnP1Left, "P1_LEFT", Qt::Key_A);
-    bindButton(layoutUi->btnP1Right, "P1_RIGHT", Qt::Key_D);
-    bindButton(layoutUi->btnP1Select, "P1_SELECT", Qt::Key_Shift);
-    bindButton(layoutUi->btnP1Start, "P1_START", Qt::Key_Return);
-    bindButton(layoutUi->btnP1B, "P1_B", Qt::Key_Z);
-    bindButton(layoutUi->btnP1A, "P1_A", Qt::Key_X);
+    const std::array defs = {
+        BindDef{layoutUi->btnP1Up, "P1_UP", Qt::Key_W},
+        BindDef{layoutUi->btnP1Down, "P1_DOWN", Qt::Key_S},
+        BindDef{layoutUi->btnP1Left, "P1_LEFT", Qt::Key_A},
+        BindDef{layoutUi->btnP1Right, "P1_RIGHT", Qt::Key_D},
+        BindDef{layoutUi->btnP1Select, "P1_SELECT", Qt::Key_Shift},
+        BindDef{layoutUi->btnP1Start, "P1_START", Qt::Key_Return},
+        BindDef{layoutUi->btnP1B, "P1_B", Qt::Key_Z},
+        BindDef{layoutUi->btnP1A, "P1_A", Qt::Key_X},
+        BindDef{layoutUi->btnP2Up, "P2_UP", Qt::Key_Up},
+        BindDef{layoutUi->btnP2Down, "P2_DOWN", Qt::Key_Down},
+        BindDef{layoutUi->btnP2Left, "P2_LEFT", Qt::Key_Left},
+        BindDef{layoutUi->btnP2Right, "P2_RIGHT", Qt::Key_Right},
+        BindDef{layoutUi->btnP2Select, "P2_SELECT", Qt::Key_Period},
+        BindDef{layoutUi->btnP2Start, "P2_START", Qt::Key_Slash},
+        BindDef{layoutUi->btnP2B, "P2_B", Qt::Key_Semicolon},
+        BindDef{layoutUi->btnP2A, "P2_A", Qt::Key_Apostrophe},
+    };
 
-    bindButton(layoutUi->btnP2Up, "P2_UP", Qt::Key_Up);
-    bindButton(layoutUi->btnP2Down, "P2_DOWN", Qt::Key_Down);
-    bindButton(layoutUi->btnP2Left, "P2_LEFT", Qt::Key_Left);
-    bindButton(layoutUi->btnP2Right, "P2_RIGHT", Qt::Key_Right);
-    bindButton(layoutUi->btnP2Select, "P2_SELECT", Qt::Key_Period);
-    bindButton(layoutUi->btnP2Start, "P2_START", Qt::Key_Slash);
-    bindButton(layoutUi->btnP2B, "P2_B", Qt::Key_Semicolon);
-    bindButton(layoutUi->btnP2A, "P2_A", Qt::Key_Apostrophe);
+    for (const auto &d : defs)
+        bindButton(d.btn, QString::fromLatin1(d.id), d.key);
 }
 
 void WSettings::initAudioSettings() {
     if (!audioUi)
         return;
+
+    auto *chk = audioUi->chkAudioEnabled;
+    auto *sld = audioUi->sliderVolume;
 
     stagedAudioEnabled = main ? main->isAudioEnabled() : true;
     appliedAudioEnabled = stagedAudioEnabled;
@@ -82,36 +100,34 @@ void WSettings::initAudioSettings() {
     stagedAudioVolume = main ? main->audioVolumePercent() : 100;
     appliedAudioVolume = stagedAudioVolume;
 
-    if (audioUi->chkAudioEnabled)
-        audioUi->chkAudioEnabled->setChecked(stagedAudioEnabled);
+    if (chk)
+        chk->setChecked(stagedAudioEnabled);
 
-    if (audioUi->sliderVolume)
-        audioUi->sliderVolume->setValue(stagedAudioVolume);
+    if (sld)
+        sld->setValue(stagedAudioVolume);
 
-    if (audioUi->sliderVolume)
-        audioUi->sliderVolume->setEnabled(stagedAudioEnabled);
+    if (sld)
+        sld->setEnabled(stagedAudioEnabled);
 
     updateAudioLabel();
 
-    if (audioUi->chkAudioEnabled) {
-        connect(audioUi->chkAudioEnabled, &QCheckBox::toggled, this,
-                [this](bool checked) {
-                    stagedAudioEnabled = checked;
+    if (chk) {
+        connect(chk, &QCheckBox::toggled, this, [this, sld](bool checked) {
+            stagedAudioEnabled = checked;
 
-                    if (audioUi && audioUi->sliderVolume)
-                        audioUi->sliderVolume->setEnabled(checked);
+            if (sld)
+                sld->setEnabled(checked);
 
-                    updateApplyButtonState();
-                });
+            updateApplyButtonState();
+        });
     }
 
-    if (audioUi->sliderVolume) {
-        connect(audioUi->sliderVolume, &QSlider::valueChanged, this,
-                [this](int value) {
-                    stagedAudioVolume = value;
-                    updateAudioLabel();
-                    updateApplyButtonState();
-                });
+    if (sld) {
+        connect(sld, &QSlider::valueChanged, this, [this](int value) {
+            stagedAudioVolume = value;
+            updateAudioLabel();
+            updateApplyButtonState();
+        });
     }
 }
 
@@ -155,7 +171,8 @@ void WSettings::updateAudioLabel() {
     if (!audioUi || !audioUi->labelVolumeValue)
         return;
 
-    audioUi->labelVolumeValue->setText(QStringLiteral("%1%").arg(stagedAudioVolume));
+    audioUi->labelVolumeValue->setText(
+        QStringLiteral("%1%").arg(stagedAudioVolume));
 }
 
 auto WSettings::keyName(int key) -> QString {
@@ -171,11 +188,12 @@ bool WSettings::eventFilter(QObject *watched, QEvent *event) {
         event->type() == QEvent::KeyPress) {
         auto *keyEvent = static_cast<QKeyEvent *>(event);
         const int key = keyEvent->key();
+        const int baseKey =
+            main ? main->bindingFor(pendingBindId)
+                 : stagedBinds.value(pendingBindId, Qt::Key_unknown);
 
         if (key == Qt::Key_Escape) {
-            applyButtonCaption(pendingButton,
-                               main ? main->bindingFor(pendingBindId)
-                                    : stagedBinds.value(pendingBindId, Qt::Key_unknown));
+            applyButtonCaption(pendingButton, baseKey);
         } else if (key != Qt::Key_unknown) {
             stagedBinds[pendingBindId] = key;
             applyButtonCaption(pendingButton, key);
